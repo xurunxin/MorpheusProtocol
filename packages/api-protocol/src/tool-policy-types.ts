@@ -8,6 +8,14 @@ export interface SandboxToolPermissions {
   network?: boolean;
 }
 
+/** Phase 6: Capability 级别的访问控制规则 */
+export interface CapabilityAccessRule {
+  /** 允许的 capability 模式，支持通配符 "code.*" */
+  allow?: string[];
+  /** 拒绝的 capability 模式，优先级高于 allow */
+  deny?: string[];
+}
+
 export interface ToolPolicyDefinition {
   enabledTools: string[];
   execMode: ExecMode;
@@ -16,6 +24,8 @@ export interface ToolPolicyDefinition {
   maxOutputBytes: number;
   allowedEnvVars: string[];
   sandboxTools: Record<string, SandboxToolPermissions>;
+  /** Phase 6: capability 级别的访问控制（可选，不配置=向后兼容） */
+  capabilityAccess?: CapabilityAccessRule;
 }
 
 export interface ToolPolicy {
@@ -39,7 +49,9 @@ export type PolicyDecisionCode =
   | "ENV_VAR_NOT_ALLOWED"
   | "QUOTA_EXHAUSTED"
   | "RATE_LIMITED"
-  | "CIRCUIT_OPEN";
+  | "CIRCUIT_OPEN"
+  | "CAPABILITY_NOT_ALLOWED"
+  | "CAPABILITY_DENIED";
 
 export interface PolicyDecision {
   allow: boolean;
