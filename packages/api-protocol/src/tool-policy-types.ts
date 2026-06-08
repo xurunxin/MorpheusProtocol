@@ -36,7 +36,10 @@ export type PolicyDecisionCode =
   | "TOOL_DISABLED_IN_SANDBOX"
   | "EXEC_MODE_RESTRICTED"
   | "SCRIPT_NOT_ALLOWED"
-  | "ENV_VAR_NOT_ALLOWED";
+  | "ENV_VAR_NOT_ALLOWED"
+  | "QUOTA_EXHAUSTED"
+  | "RATE_LIMITED"
+  | "CIRCUIT_OPEN";
 
 export interface PolicyDecision {
   allow: boolean;
