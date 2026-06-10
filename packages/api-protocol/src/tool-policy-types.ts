@@ -1,31 +1,71 @@
 export type ToolPolicyStatus = "active" | "deprecated" | "draft";
-export type ExecMode = "restricted" | "full";
 
-export interface SandboxToolPermissions {
+export type ToolcallRoute = "wasm.exec" | "bash.exec" | "tool.exec" | "container.exec";
+
+export interface ToolRouteBinding {
+  route: ToolcallRoute;
+  target?: string;
+}
+
+export interface ToolExecutionBinding {
+  default?: ToolRouteBinding;
+  commands?: Record<string, ToolRouteBinding>;
+}
+
+export interface ToolExecutionDefaults {
+  maxOutputBytes: number;
+  allowedEnvVars: string[];
+}
+
+export interface WasmToolTargetPolicy {
   enabled: boolean;
+  command?: string;
+  timeoutMs?: number;
+  maxOutputBytes?: number;
   preopens?: string[];
   env?: string[];
   network?: boolean;
+  allowedHosts?: string[];
+  capabilityTags?: string[];
 }
 
-/** Phase 6: Capability 级别的访问控制规则 */
+export interface WasmExecRoutePolicy {
+  enabled: boolean;
+  tools: Record<string, WasmToolTargetPolicy>;
+}
+
+export interface BackendPolicyPlaceholder {
+  enabled: boolean;
+}
+
+export interface ToolPolicySourceMetadata {
+  origin?: "yaml" | "api" | "migration";
+  yamlPath?: string;
+  yamlHash?: string;
+}
+
 export interface CapabilityAccessRule {
-  /** 允许的 capability 模式，支持通配符 "code.*" */
   allow?: string[];
-  /** 拒绝的 capability 模式，优先级高于 allow */
   deny?: string[];
 }
 
 export interface ToolPolicyDefinition {
-  enabledTools: string[];
-  execMode: ExecMode;
-  allowedScripts: string[];
-  skillScriptDirs: string[];
-  maxOutputBytes: number;
-  allowedEnvVars: string[];
-  sandboxTools: Record<string, SandboxToolPermissions>;
-  /** Phase 6: capability 级别的访问控制（可选，不配置=向后兼容） */
+  schemaVersion: 2;
+  tools: {
+    allowed: string[];
+  };
+  execution: {
+    defaults: ToolExecutionDefaults;
+    bindings: Record<string, ToolExecutionBinding>;
+    routes: Partial<{
+      "wasm.exec": WasmExecRoutePolicy;
+      "bash.exec": BackendPolicyPlaceholder;
+      "tool.exec": BackendPolicyPlaceholder;
+      "container.exec": BackendPolicyPlaceholder;
+    }>;
+  };
   capabilityAccess?: CapabilityAccessRule;
+  source?: ToolPolicySourceMetadata;
 }
 
 export interface ToolPolicy {
@@ -38,38 +78,58 @@ export interface ToolPolicy {
   updatedAt: string;
 }
 
-export type PolicyDecisionCode =
+export type ToolPolicyDecisionCode =
   | "ALLOWED"
   | "POLICY_NOT_FOUND"
   | "POLICY_INACTIVE"
   | "TOOL_NOT_ALLOWED"
-  | "TOOL_DISABLED_IN_SANDBOX"
-  | "EXEC_MODE_RESTRICTED"
-  | "SCRIPT_NOT_ALLOWED"
+  | "ROUTE_NOT_FOUND"
+  | "ROUTE_DISABLED"
+  | "TARGET_NOT_ALLOWED"
+  | "CAPABILITY_NOT_ALLOWED"
+  | "CAPABILITY_DENIED"
   | "ENV_VAR_NOT_ALLOWED"
   | "QUOTA_EXHAUSTED"
   | "RATE_LIMITED"
   | "CIRCUIT_OPEN"
-  | "CAPABILITY_NOT_ALLOWED"
-  | "CAPABILITY_DENIED";
+  | "BACKEND_NOT_IMPLEMENTED"
+  | "WASM_EXEC_FAILED"
+  | "BASH_EXEC_FAILED"
+  | "TOOL_EXEC_FAILED"
+  | "CONTAINER_EXEC_UNAVAILABLE";
 
-export interface PolicyDecision {
+export interface ToolPolicyDecision {
   allow: boolean;
-  code: PolicyDecisionCode;
+  code: ToolPolicyDecisionCode;
   reason: string;
   policyId: string | null;
   policyVersion: string | null;
-  resolvedSandboxConfig: SandboxToolPermissions | null;
+  route?: ToolcallRoute;
+  target?: string;
+  resolvedBackendConfig: WasmToolTargetPolicy | BackendPolicyPlaceholder | null;
 }
 
-export interface ToolGatewayRequest {
+export interface ToolcallRequest {
   agentId: string | null;
-  tool: string;
+  visibleTool: string;
+  route: ToolcallRoute;
+  target?: string;
   command: string;
   args: unknown[];
   audit: { userId: string | null; sessionId: string; toolCallId: string };
   requestedEnvVars?: string[];
   requestedMaxOutputBytes?: number;
+}
+
+export interface ToolcallResult<T = unknown> {
+  success: boolean;
+  visibleTool: string;
+  route: ToolcallRoute;
+  target?: string;
+  command: string;
+  output?: T;
+  error?: { code: ToolPolicyDecisionCode | string; message: string };
+  audit?: unknown;
 }
 
 export interface CreateToolPolicyRequest {
