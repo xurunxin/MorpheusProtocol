@@ -34,6 +34,28 @@ export interface WasmExecRoutePolicy {
   tools: Record<string, WasmToolTargetPolicy>;
 }
 
+export interface BashExecRoutePolicy {
+  enabled: boolean;
+  mode?: "restricted" | "full";
+  allowedScripts?: string[];
+  skillScriptDirs?: string[];
+  allowedEnvVars?: string[];
+  maxOutputBytes?: number;
+  timeoutSec?: number;
+  forbidShellOperators?: boolean;
+}
+
+export interface ToolExecTargetPolicy {
+  enabled: boolean;
+  capabilityTags?: string[];
+  maxOutputBytes?: number;
+}
+
+export interface ToolExecRoutePolicy {
+  enabled: boolean;
+  tools?: Record<string, ToolExecTargetPolicy>;
+}
+
 export interface BackendPolicyPlaceholder {
   enabled: boolean;
 }
@@ -59,8 +81,8 @@ export interface ToolPolicyDefinition {
     bindings: Record<string, ToolExecutionBinding>;
     routes: Partial<{
       "wasm.exec": WasmExecRoutePolicy;
-      "bash.exec": BackendPolicyPlaceholder;
-      "tool.exec": BackendPolicyPlaceholder;
+      "bash.exec": BashExecRoutePolicy;
+      "tool.exec": ToolExecRoutePolicy;
       "container.exec": BackendPolicyPlaceholder;
     }>;
   };
@@ -106,7 +128,12 @@ export interface ToolPolicyDecision {
   policyVersion: string | null;
   route?: ToolcallRoute;
   target?: string;
-  resolvedBackendConfig: WasmToolTargetPolicy | BackendPolicyPlaceholder | null;
+  resolvedBackendConfig:
+    | WasmToolTargetPolicy
+    | BashExecRoutePolicy
+    | ToolExecTargetPolicy
+    | BackendPolicyPlaceholder
+    | null;
 }
 
 export interface ToolcallRequest {

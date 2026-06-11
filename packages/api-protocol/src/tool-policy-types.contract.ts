@@ -1,7 +1,9 @@
 import type {
+  BashExecRoutePolicy,
   ToolPolicy,
   ToolPolicyDecision,
   ToolPolicyDefinition,
+  ToolExecRoutePolicy,
   ToolcallRequest,
   ToolcallResult,
   ToolcallRoute,
@@ -45,6 +47,43 @@ const _definition = {
     origin: "migration",
     yamlPath: "config/agents/default.yaml",
     yamlHash: "sha256:demo",
+  },
+} satisfies ToolPolicyDefinition;
+
+const bashRoute = {
+  enabled: true,
+  mode: "restricted",
+  allowedScripts: ["node", "bun"],
+  skillScriptDirs: ["config/skills/preset", "config/skills/user"],
+  allowedEnvVars: ["PATH", "HOME"],
+  maxOutputBytes: 65536,
+  timeoutSec: 30,
+  forbidShellOperators: true,
+} satisfies BashExecRoutePolicy;
+
+const toolRoute = {
+  enabled: true,
+  tools: {
+    "builtin.read": { enabled: true },
+    "builtin.grep": { enabled: true, capabilityTags: ["code.search"] },
+  },
+} satisfies ToolExecRoutePolicy;
+
+export const phase2PolicyContract = {
+  schemaVersion: 2,
+  tools: { allowed: ["bash", "read", "grep"] },
+  execution: {
+    defaults: { maxOutputBytes: 65536, allowedEnvVars: ["PATH"] },
+    bindings: {
+      bash: { default: { route: "bash.exec" } },
+      read: { default: { route: "tool.exec", target: "builtin.read" } },
+      grep: { default: { route: "tool.exec", target: "builtin.grep" } },
+    },
+    routes: {
+      "bash.exec": bashRoute,
+      "tool.exec": toolRoute,
+      "container.exec": { enabled: false },
+    },
   },
 } satisfies ToolPolicyDefinition;
 
