@@ -1,3 +1,5 @@
+import type { CapabilityTag } from "./agent-registry-types.js";
+
 export type ToolPolicyStatus = "active" | "deprecated" | "draft";
 
 export type ToolcallRoute = "wasm.exec" | "bash.exec" | "tool.exec" | "container.exec";
@@ -189,4 +191,29 @@ export interface ToolPolicyVersionEntry {
 export interface ListToolPolicyVersionsResponse {
   versions: ToolPolicyVersionEntry[];
   total: number;
+}
+
+export type ToolPolicySimulationSource = "agent" | "default" | "provided" | "none";
+
+export interface ToolPolicySimulationRequest {
+  agentId: string | null;
+  visibleTool: string;
+  command: string;
+  args?: unknown[];
+  route?: ToolcallRoute;
+  target?: string;
+  requestedEnvVars?: string[];
+  requestedMaxOutputBytes?: number;
+  policy?: ToolPolicy;
+  definition?: ToolPolicyDefinition;
+  capabilityTags?: CapabilityTag[];
+}
+
+export interface ToolPolicySimulationResponse {
+  request: ToolcallRequest;
+  policySource: ToolPolicySimulationSource;
+  policyId: string | null;
+  policyVersion: string | null;
+  decision: ToolPolicyDecision;
+  wouldExecuteBackend: boolean;
 }
