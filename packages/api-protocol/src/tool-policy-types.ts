@@ -1,4 +1,5 @@
 import type { CapabilityTag } from "./agent-registry-types.js";
+import type { BreakerState } from "./quota-types.js";
 
 export type ToolPolicyStatus = "active" | "deprecated" | "draft";
 
@@ -197,6 +198,7 @@ export type ToolPolicySimulationSource = "agent" | "default" | "provided" | "non
 
 export interface ToolPolicySimulationRequest {
   agentId: string | null;
+  sessionId?: string;
   visibleTool: string;
   command: string;
   args?: unknown[];
@@ -216,4 +218,47 @@ export interface ToolPolicySimulationResponse {
   policyVersion: string | null;
   decision: ToolPolicyDecision;
   wouldExecuteBackend: boolean;
+  runtimePreview?: ToolPolicySimulationRuntimePreview;
+}
+
+export type ToolPolicySimulationRuntimeGateStatus = "pass" | "fail" | "skipped";
+export type ToolPolicySimulationRuntimeGateCode =
+  | "CIRCUIT_OPEN"
+  | "RATE_LIMITED"
+  | "QUOTA_EXHAUSTED";
+
+export interface ToolPolicySimulationCircuitPreview {
+  status: ToolPolicySimulationRuntimeGateStatus;
+  code?: ToolPolicySimulationRuntimeGateCode;
+  reason: string;
+  state?: BreakerState;
+  consecutiveFailures?: number;
+}
+
+export interface ToolPolicySimulationRateLimitPreview {
+  status: ToolPolicySimulationRuntimeGateStatus;
+  code?: ToolPolicySimulationRuntimeGateCode;
+  reason: string;
+  remaining?: number;
+  resetAt?: number;
+}
+
+export interface ToolPolicySimulationQuotaPreview {
+  status: ToolPolicySimulationRuntimeGateStatus;
+  code?: ToolPolicySimulationRuntimeGateCode;
+  reason: string;
+  scope?: "agent" | "session";
+  callsLeft?: number;
+  tokensLeft?: number;
+  durationMsLeft?: number;
+}
+
+export interface ToolPolicySimulationRuntimePreview {
+  status: ToolPolicySimulationRuntimeGateStatus;
+  code?: ToolPolicySimulationRuntimeGateCode;
+  reason: string;
+  agentId: string;
+  circuit: ToolPolicySimulationCircuitPreview;
+  rateLimit: ToolPolicySimulationRateLimitPreview;
+  quota: ToolPolicySimulationQuotaPreview;
 }
