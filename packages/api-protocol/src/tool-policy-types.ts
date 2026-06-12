@@ -198,6 +198,7 @@ export type ToolPolicySimulationSource = "agent" | "default" | "provided" | "non
 
 export interface ToolPolicySimulationRequest {
   agentId: string | null;
+  sessionId?: string;
   visibleTool: string;
   command: string;
   args?: unknown[];
