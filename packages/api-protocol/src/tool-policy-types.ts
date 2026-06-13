@@ -64,7 +64,7 @@ export interface BackendPolicyPlaceholder {
 }
 
 export interface ToolPolicySourceMetadata {
-  origin?: "yaml" | "api" | "migration";
+  origin?: "yaml" | "api" | "migration" | "builtin";
   yamlPath?: string;
   yamlHash?: string;
 }
