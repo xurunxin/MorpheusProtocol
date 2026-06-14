@@ -20,6 +20,18 @@ export interface ToolExecutionDefaults {
   allowedEnvVars: string[];
 }
 
+export interface VirtualBashPolicy {
+  commands?: string[];
+  readableMounts?: string[];
+  writableMounts?: string[];
+  persistFilesystem?: false | "session";
+  runtimes?: {
+    javascript?: boolean;
+    python?: boolean;
+    sqlite?: boolean;
+  };
+}
+
 export interface WasmToolTargetPolicy {
   enabled: boolean;
   command?: string;
@@ -30,6 +42,7 @@ export interface WasmToolTargetPolicy {
   network?: boolean;
   allowedHosts?: string[];
   capabilityTags?: string[];
+  virtualBash?: VirtualBashPolicy;
 }
 
 export interface WasmExecRoutePolicy {
