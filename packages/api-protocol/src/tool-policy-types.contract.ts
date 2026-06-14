@@ -54,7 +54,7 @@ const bashRoute = {
   enabled: true,
   mode: "restricted",
   allowedScripts: ["node", "bun"],
-  skillScriptDirs: ["config/skills/preset", "config/skills/user"],
+  skillScriptDirs: ["config/skills", "config/skills/user"],
   allowedEnvVars: ["PATH", "HOME"],
   maxOutputBytes: 65536,
   timeoutSec: 30,
