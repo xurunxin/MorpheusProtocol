@@ -115,7 +115,7 @@ const _request = {
   target: "grep",
   command: "grep",
   args: ["foo", "README.md"],
-  audit: { userId: "u-1", sessionId: "s-1", toolCallId: "tc-1" },
+  audit: { userId: "u-1", apiKeyId: "key-1", sessionId: "s-1", toolCallId: "tc-1" },
   requestedEnvVars: ["PATH"],
   requestedMaxOutputBytes: 65536,
 } satisfies ToolcallRequest;

@@ -172,7 +172,12 @@ export interface ToolcallRequest {
   target?: string;
   command: string;
   args: unknown[];
-  audit: { userId: string | null; sessionId: string; toolCallId: string };
+  audit: {
+    userId: string | null;
+    apiKeyId?: string | null;
+    sessionId: string;
+    toolCallId: string;
+  };
   requestedEnvVars?: string[];
   requestedMaxOutputBytes?: number;
 }
