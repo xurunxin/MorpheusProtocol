@@ -149,6 +149,56 @@ export type ToolPolicyDecisionCode =
   | "TOOL_EXEC_FAILED"
   | "CONTAINER_EXEC_UNAVAILABLE";
 
+export type ToolInvocationMode = "agent" | "rpc" | "simulation" | "system";
+
+export type ToolInvocationErrorKind =
+  | "policy_denied"
+  | "timeout"
+  | "quota_exceeded"
+  | "rate_limited"
+  | "tool_failed"
+  | "cancelled";
+
+export interface ToolArtifactRef {
+  artifactId: string;
+}
+
+export interface ToolInvocationMetadata {
+  visibleTool: string;
+  route: ToolcallRoute;
+  target?: string;
+  command: string;
+  userId?: string | null;
+  apiKeyId?: string | null;
+}
+
+export interface ToolInvocationEnvelope {
+  toolId: string;
+  callId: string;
+  sessionId: string;
+  runId: string;
+  agentId: string | null;
+  args: unknown[];
+  mode: ToolInvocationMode;
+  metadata: ToolInvocationMetadata;
+}
+
+export interface ToolResultEnvelopeError {
+  kind: ToolInvocationErrorKind;
+  message: string;
+  originalCode?: string;
+}
+
+export interface ToolResultEnvelope<T = unknown> {
+  callId: string;
+  status: "completed" | "denied" | "failed";
+  output?: T;
+  artifacts: ToolArtifactRef[];
+  error?: ToolResultEnvelopeError;
+  durationMs?: number;
+  auditIds: string[];
+}
+
 export interface ToolPolicyDecision {
   allow: boolean;
   code: ToolPolicyDecisionCode;
@@ -178,12 +228,14 @@ export interface ToolcallRequest {
     sessionId: string;
     toolCallId: string;
   };
+  runId?: string;
   requestedEnvVars?: string[];
   requestedMaxOutputBytes?: number;
 }
 
 export interface ToolcallResult<T = unknown> {
   success: boolean;
+  callId?: string;
   visibleTool: string;
   route: ToolcallRoute;
   target?: string;
@@ -292,4 +344,226 @@ export interface ToolPolicySimulationRuntimePreview {
   circuit: ToolPolicySimulationCircuitPreview;
   rateLimit: ToolPolicySimulationRateLimitPreview;
   quota: ToolPolicySimulationQuotaPreview;
+}
+
+const POLICY_DENIED_DECISION_CODES = new Set<ToolPolicyDecisionCode>([
+  "POLICY_NOT_FOUND",
+  "POLICY_INACTIVE",
+  "TOOL_NOT_ALLOWED",
+  "ROUTE_NOT_FOUND",
+  "ROUTE_DISABLED",
+  "TARGET_NOT_ALLOWED",
+  "CAPABILITY_NOT_ALLOWED",
+  "CAPABILITY_DENIED",
+  "ENV_VAR_NOT_ALLOWED",
+]);
+
+const LEGACY_POLICY_DENIED_CODES = new Set<string>([
+  "SCRIPT_NOT_ALLOWED",
+  "TOOL_DISABLED_IN_SANDBOX",
+]);
+
+const TOOL_FAILURE_DECISION_CODES = new Set<ToolPolicyDecisionCode>([
+  "CIRCUIT_OPEN",
+  "BACKEND_NOT_IMPLEMENTED",
+  "WASM_EXEC_FAILED",
+  "BASH_EXEC_FAILED",
+  "TOOL_EXEC_FAILED",
+  "CONTAINER_EXEC_UNAVAILABLE",
+]);
+
+export function mapToolPolicyDecisionCodeToInvocationErrorKind(
+  code: ToolPolicyDecisionCode | string
+): ToolInvocationErrorKind {
+  const normalizedCode = normalizeInvocationCode(code);
+  if (normalizedCode === "TIMEOUT") {
+    return "timeout";
+  }
+  if (normalizedCode === "CANCELLED") {
+    return "cancelled";
+  }
+  if (normalizedCode === "QUOTA_EXHAUSTED") {
+    return "quota_exceeded";
+  }
+  if (normalizedCode === "RATE_LIMITED") {
+    return "rate_limited";
+  }
+  if (
+    (isToolPolicyDecisionCode(normalizedCode) &&
+      POLICY_DENIED_DECISION_CODES.has(normalizedCode)) ||
+    LEGACY_POLICY_DENIED_CODES.has(normalizedCode)
+  ) {
+    return "policy_denied";
+  }
+  if (isToolPolicyDecisionCode(normalizedCode) && TOOL_FAILURE_DECISION_CODES.has(normalizedCode)) {
+    return "tool_failed";
+  }
+  return "tool_failed";
+}
+
+export function toToolInvocationEnvelope(
+  request: ToolcallRequest,
+  mode: ToolInvocationMode = "agent"
+): ToolInvocationEnvelope {
+  const toolId = requireNonEmptyString(request.visibleTool, "visibleTool");
+  const callId = requireNonEmptyString(request.audit.toolCallId, "toolCallId");
+  const sessionId = requireNonEmptyString(request.audit.sessionId, "sessionId");
+  const runId = requireNonEmptyString(request.runId ?? "", "runId");
+  const command = requireNonEmptyString(request.command, "command");
+  if (!Array.isArray(request.args)) {
+    throw new Error("[tool-invocation] args must be an array");
+  }
+
+  return {
+    toolId,
+    callId,
+    sessionId,
+    runId,
+    agentId: request.agentId,
+    args: request.args,
+    mode,
+    metadata: {
+      visibleTool: toolId,
+      route: request.route,
+      ...(request.target !== undefined ? { target: request.target } : {}),
+      command,
+      userId: request.audit.userId,
+      apiKeyId: request.audit.apiKeyId ?? null,
+    },
+  };
+}
+
+export function toToolResultEnvelope<T = unknown>(
+  request: ToolcallRequest,
+  result: ToolcallResult<T>
+): ToolResultEnvelope<T> {
+  const callId = resolveToolCallId(request, result);
+  const auditRecord = asRecord(result.audit);
+  const durationMs = getOptionalNumber(auditRecord, "durationMs");
+  const auditIds = getStringArray(auditRecord, "auditIds");
+  const artifacts = getStringArray(auditRecord, "artifactIds").map((artifactId) => ({
+    artifactId,
+  }));
+
+  if (result.success) {
+    return {
+      callId,
+      status: "completed",
+      output: result.output,
+      artifacts,
+      durationMs,
+      auditIds,
+    };
+  }
+
+  const code = result.error?.code;
+  const message = result.error?.message ?? "Tool execution failed";
+  const kind =
+    code === undefined ? "tool_failed" : mapToolPolicyDecisionCodeToInvocationErrorKind(code);
+
+  return {
+    callId,
+    status: kind === "policy_denied" ? "denied" : "failed",
+    output: undefined,
+    artifacts: kind === "policy_denied" ? [] : artifacts,
+    error: {
+      kind,
+      ...(code !== undefined ? { originalCode: code } : {}),
+      message,
+    },
+    durationMs,
+    auditIds,
+  };
+}
+
+function resolveToolCallId(request: ToolcallRequest, result: ToolcallResult): string {
+  if (request.audit.toolCallId.length > 0) {
+    return request.audit.toolCallId;
+  }
+  if (result.callId !== undefined && result.callId.length > 0) {
+    return result.callId;
+  }
+  const auditRecord = asRecord(result.audit);
+  const auditToolCallId = getOptionalString(auditRecord, "toolCallId");
+  if (auditToolCallId !== undefined) {
+    return auditToolCallId;
+  }
+  throw new Error("[tool-invocation] Missing stable callId");
+}
+
+function normalizeInvocationCode(code: string): string {
+  return code
+    .trim()
+    .replace(/[\s-]+/g, "_")
+    .toUpperCase();
+}
+
+function requireNonEmptyString(value: string, field: string): string {
+  if (typeof value !== "string" || value.length === 0) {
+    throw new Error(`[tool-invocation] ${field} must be a non-empty string`);
+  }
+  return value;
+}
+
+function isToolPolicyDecisionCode(value: string): value is ToolPolicyDecisionCode {
+  return (
+    value === "ALLOWED" ||
+    value === "POLICY_NOT_FOUND" ||
+    value === "POLICY_INACTIVE" ||
+    value === "TOOL_NOT_ALLOWED" ||
+    value === "ROUTE_NOT_FOUND" ||
+    value === "ROUTE_DISABLED" ||
+    value === "TARGET_NOT_ALLOWED" ||
+    value === "CAPABILITY_NOT_ALLOWED" ||
+    value === "CAPABILITY_DENIED" ||
+    value === "ENV_VAR_NOT_ALLOWED" ||
+    value === "QUOTA_EXHAUSTED" ||
+    value === "RATE_LIMITED" ||
+    value === "CIRCUIT_OPEN" ||
+    value === "BACKEND_NOT_IMPLEMENTED" ||
+    value === "WASM_EXEC_FAILED" ||
+    value === "BASH_EXEC_FAILED" ||
+    value === "TOOL_EXEC_FAILED" ||
+    value === "CONTAINER_EXEC_UNAVAILABLE"
+  );
+}
+
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  if (typeof value !== "object" || value === null) {
+    return undefined;
+  }
+  return value as Record<string, unknown>;
+}
+
+function getOptionalString(
+  record: Record<string, unknown> | undefined,
+  key: string
+): string | undefined {
+  if (record === undefined) {
+    return undefined;
+  }
+  const value = record[key];
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+function getOptionalNumber(
+  record: Record<string, unknown> | undefined,
+  key: string
+): number | undefined {
+  if (record === undefined) {
+    return undefined;
+  }
+  const value = record[key];
+  return typeof value === "number" ? value : undefined;
+}
+
+function getStringArray(record: Record<string, unknown> | undefined, key: string): string[] {
+  if (record === undefined) {
+    return [];
+  }
+  const value = record[key];
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.filter((entry): entry is string => typeof entry === "string" && entry.length > 0);
 }

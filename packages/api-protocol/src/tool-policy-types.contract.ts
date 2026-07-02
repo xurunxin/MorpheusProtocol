@@ -1,8 +1,13 @@
 import type {
   BashExecRoutePolicy,
+  ToolInvocationEnvelope,
+  ToolInvocationErrorKind,
+  ToolInvocationMetadata,
+  ToolInvocationMode,
   ToolPolicy,
   ToolPolicyDecision,
   ToolPolicyDefinition,
+  ToolResultEnvelope,
   ToolExecRoutePolicy,
   ToolcallRequest,
   ToolcallResult,
@@ -10,6 +15,16 @@ import type {
 } from "./tool-policy-types.js";
 
 const _route = "wasm.exec" satisfies ToolcallRoute;
+const _mode = "agent" satisfies ToolInvocationMode;
+const _errorKind = "tool_failed" satisfies ToolInvocationErrorKind;
+const _metadata = {
+  visibleTool: "bash",
+  route: "wasm.exec",
+  target: "grep",
+  command: "grep",
+  userId: "u-1",
+  apiKeyId: "key-1",
+} satisfies ToolInvocationMetadata;
 
 const _definition = {
   schemaVersion: 2,
@@ -116,12 +131,14 @@ const _request = {
   command: "grep",
   args: ["foo", "README.md"],
   audit: { userId: "u-1", apiKeyId: "key-1", sessionId: "s-1", toolCallId: "tc-1" },
+  runId: "run-1",
   requestedEnvVars: ["PATH"],
   requestedMaxOutputBytes: 65536,
 } satisfies ToolcallRequest;
 
 const _result = {
   success: true,
+  callId: "tc-1",
   visibleTool: "bash",
   route: "wasm.exec",
   target: "grep",
@@ -129,3 +146,23 @@ const _result = {
   output: "foo README.md",
   audit: { toolCallId: "tc-1" },
 } satisfies ToolcallResult<string>;
+
+const _invocationEnvelope = {
+  toolId: "bash",
+  callId: "tc-1",
+  sessionId: "s-1",
+  runId: "run-1",
+  agentId: "default",
+  args: ["foo", "README.md"],
+  mode: "agent",
+  metadata: _metadata,
+} satisfies ToolInvocationEnvelope;
+
+const _resultEnvelope = {
+  callId: "tc-1",
+  status: "completed",
+  output: "foo README.md",
+  artifacts: [{ artifactId: "artifact-1" }],
+  durationMs: 12,
+  auditIds: ["audit-1"],
+} satisfies ToolResultEnvelope<string>;
