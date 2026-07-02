@@ -1,5 +1,6 @@
 import type { CapabilityTag } from "./agent-registry-types.js";
 import type { BreakerState } from "./quota-types.js";
+import type { ToolRiskLevel } from "./observability-types.js";
 
 export type ToolPolicyStatus = "active" | "deprecated" | "draft";
 
@@ -129,11 +130,65 @@ export interface ToolPolicy {
   updatedAt: string;
 }
 
+export type ToolRegistrySource = "builtin" | "skill" | "mcp" | "plugin";
+
+export interface ToolRegistryExecutionTarget {
+  route: ToolcallRoute;
+  target?: string;
+}
+
+export interface ToolRegistryPolicyBinding extends ToolRegistryExecutionTarget {
+  visibleTool: string;
+}
+
+export interface ToolRegistryDeprecation {
+  replacementToolId?: string;
+  sinceVersion?: string;
+  message?: string;
+}
+
+export interface ToolRegistryEntry {
+  id: string;
+  version: string;
+  source: ToolRegistrySource;
+  inputSchema: Record<string, unknown>;
+  outputSchema: Record<string, unknown>;
+  riskLevel: ToolRiskLevel;
+  capabilities: string[];
+  executionTarget: ToolRegistryExecutionTarget;
+  policyBinding: ToolRegistryPolicyBinding;
+  deprecation?: ToolRegistryDeprecation;
+}
+
+export interface DiscoveredTool {
+  id: string;
+  version: string;
+  source: ToolRegistrySource;
+  inputSchema: Record<string, unknown>;
+  outputSchema: Record<string, unknown>;
+  riskLevel: ToolRiskLevel;
+  capabilities: string[];
+  executionTarget: ToolRegistryExecutionTarget;
+  policyBinding: ToolRegistryPolicyBinding;
+  deprecation?: ToolRegistryDeprecation;
+}
+
+export interface ToolDiscoveryRequest {
+  policy: ToolPolicyDefinition;
+  capabilityTags?: string[];
+}
+
+export interface ToolDiscoveryResponse {
+  tools: DiscoveredTool[];
+}
+
 export type ToolPolicyDecisionCode =
   | "ALLOWED"
   | "POLICY_NOT_FOUND"
   | "POLICY_INACTIVE"
   | "TOOL_NOT_ALLOWED"
+  | "TOOL_NOT_REGISTERED"
+  | "TOOL_REGISTRY_INVALID"
   | "ROUTE_NOT_FOUND"
   | "ROUTE_DISABLED"
   | "TARGET_NOT_ALLOWED"
@@ -350,6 +405,8 @@ const POLICY_DENIED_DECISION_CODES = new Set<ToolPolicyDecisionCode>([
   "POLICY_NOT_FOUND",
   "POLICY_INACTIVE",
   "TOOL_NOT_ALLOWED",
+  "TOOL_NOT_REGISTERED",
+  "TOOL_REGISTRY_INVALID",
   "ROUTE_NOT_FOUND",
   "ROUTE_DISABLED",
   "TARGET_NOT_ALLOWED",
@@ -511,6 +568,8 @@ function isToolPolicyDecisionCode(value: string): value is ToolPolicyDecisionCod
     value === "POLICY_NOT_FOUND" ||
     value === "POLICY_INACTIVE" ||
     value === "TOOL_NOT_ALLOWED" ||
+    value === "TOOL_NOT_REGISTERED" ||
+    value === "TOOL_REGISTRY_INVALID" ||
     value === "ROUTE_NOT_FOUND" ||
     value === "ROUTE_DISABLED" ||
     value === "TARGET_NOT_ALLOWED" ||
