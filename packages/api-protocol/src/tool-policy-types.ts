@@ -45,6 +45,13 @@ export interface VirtualShellPolicy {
   };
 }
 
+export interface SandboxCliTargetPolicy {
+  enabled: boolean;
+  manifest: string;
+  binaryPath?: string;
+  workspaceGuestRoot?: string;
+}
+
 export interface WasmToolTargetPolicy {
   enabled: boolean;
   command?: string;
@@ -57,6 +64,7 @@ export interface WasmToolTargetPolicy {
   capabilityTags?: string[];
   virtualBash?: VirtualBashPolicy;
   virtualShell?: VirtualShellPolicy;
+  sandboxCli?: SandboxCliTargetPolicy;
 }
 
 export interface WasmExecRoutePolicy {
