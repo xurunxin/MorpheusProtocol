@@ -45,6 +45,24 @@ export interface VirtualShellPolicy {
   };
 }
 
+export interface SandboxCliTargetPolicy {
+  enabled: boolean;
+  mode?: "sandbox-cli" | "dual-run" | "rollback";
+  acceptedDifferences?: Array<"success" | "stdout" | "stderr" | "exitCode" | "errorCode">;
+  rollbackReason?: string;
+  migration?: {
+    status: "legacy" | "dual-run" | "sandbox-cli" | "rollback" | "retired";
+    pilot?: boolean;
+    ownerIssue?: string;
+    startedAt?: string;
+    completedAt?: string;
+    notes?: string;
+  };
+  manifest: string;
+  binaryPath?: string;
+  workspaceGuestRoot?: string;
+}
+
 export interface WasmToolTargetPolicy {
   enabled: boolean;
   command?: string;
@@ -57,6 +75,7 @@ export interface WasmToolTargetPolicy {
   capabilityTags?: string[];
   virtualBash?: VirtualBashPolicy;
   virtualShell?: VirtualShellPolicy;
+  sandboxCli?: SandboxCliTargetPolicy;
 }
 
 export interface WasmExecRoutePolicy {
