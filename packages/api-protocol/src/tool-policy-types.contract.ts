@@ -56,6 +56,7 @@ const _definition = {
             sandboxCli: {
               enabled: true,
               mode: "dual-run",
+              acceptedDifferences: ["stdout"],
               manifest: "packages/sandbox-cli/fixtures/grep/sandbox-artifact.json",
             },
           },
