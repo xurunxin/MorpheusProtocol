@@ -47,6 +47,7 @@ export interface VirtualShellPolicy {
 
 export interface SandboxCliTargetPolicy {
   enabled: boolean;
+  mode?: "sandbox-cli" | "dual-run";
   manifest: string;
   binaryPath?: string;
   workspaceGuestRoot?: string;

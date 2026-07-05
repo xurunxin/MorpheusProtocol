@@ -49,7 +49,16 @@ const _definition = {
       "wasm.exec": {
         enabled: true,
         tools: {
-          grep: { enabled: true, preopens: ["/workspace"], network: false },
+          grep: {
+            enabled: true,
+            preopens: ["/workspace"],
+            network: false,
+            sandboxCli: {
+              enabled: true,
+              mode: "dual-run",
+              manifest: "packages/sandbox-cli/fixtures/grep/sandbox-artifact.json",
+            },
+          },
         },
       },
       "bash.exec": { enabled: false },
