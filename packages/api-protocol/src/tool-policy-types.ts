@@ -21,30 +21,6 @@ export interface ToolExecutionDefaults {
   allowedEnvVars: string[];
 }
 
-export interface VirtualBashPolicy {
-  commands?: string[];
-  readableMounts?: string[];
-  writableMounts?: string[];
-  persistFilesystem?: false | "session";
-  runtimes?: {
-    javascript?: boolean;
-    python?: boolean;
-    sqlite?: boolean;
-  };
-}
-
-export interface VirtualShellPolicy {
-  commands?: string[];
-  readableMounts?: string[];
-  writableMounts?: string[];
-  persistFilesystem?: false | "session";
-  runtimes?: {
-    javascript?: false;
-    python?: false;
-    sqlite?: false;
-  };
-}
-
 export interface SandboxCliTargetPolicy {
   enabled: true;
   manifest: string;
@@ -62,8 +38,6 @@ export interface WasmToolTargetPolicy {
   network?: boolean;
   allowedHosts?: string[];
   capabilityTags?: string[];
-  virtualBash?: VirtualBashPolicy;
-  virtualShell?: VirtualShellPolicy;
   sandboxCli?: SandboxCliTargetPolicy;
 }
 
