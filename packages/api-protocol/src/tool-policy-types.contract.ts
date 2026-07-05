@@ -57,6 +57,13 @@ const _definition = {
               enabled: true,
               mode: "dual-run",
               acceptedDifferences: ["stdout"],
+              migration: {
+                status: "dual-run",
+                pilot: true,
+                ownerIssue: "DAR-130",
+                startedAt: "2026-07-05T00:00:00.000Z",
+                notes: "Pilot grep before sandbox-cli primary cutover.",
+              },
               manifest: "packages/sandbox-cli/fixtures/grep/sandbox-artifact.json",
             },
           },

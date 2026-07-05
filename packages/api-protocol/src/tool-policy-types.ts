@@ -50,6 +50,14 @@ export interface SandboxCliTargetPolicy {
   mode?: "sandbox-cli" | "dual-run" | "rollback";
   acceptedDifferences?: Array<"success" | "stdout" | "stderr" | "exitCode" | "errorCode">;
   rollbackReason?: string;
+  migration?: {
+    status: "legacy" | "dual-run" | "sandbox-cli" | "rollback" | "retired";
+    pilot?: boolean;
+    ownerIssue?: string;
+    startedAt?: string;
+    completedAt?: string;
+    notes?: string;
+  };
   manifest: string;
   binaryPath?: string;
   workspaceGuestRoot?: string;
