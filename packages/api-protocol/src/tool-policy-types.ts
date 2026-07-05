@@ -471,7 +471,9 @@ export function toToolInvocationEnvelope(
       userId: request.audit.userId,
       apiKeyId: request.audit.apiKeyId ?? null,
     },
-    ...(request.requestedEnvVars !== undefined ? { requestedEnvVars: request.requestedEnvVars } : {}),
+    ...(request.requestedEnvVars !== undefined
+      ? { requestedEnvVars: request.requestedEnvVars }
+      : {}),
     ...(request.requestedMaxOutputBytes !== undefined
       ? { requestedMaxOutputBytes: request.requestedMaxOutputBytes }
       : {}),
