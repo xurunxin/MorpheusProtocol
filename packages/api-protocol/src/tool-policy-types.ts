@@ -21,43 +21,8 @@ export interface ToolExecutionDefaults {
   allowedEnvVars: string[];
 }
 
-export interface VirtualBashPolicy {
-  commands?: string[];
-  readableMounts?: string[];
-  writableMounts?: string[];
-  persistFilesystem?: false | "session";
-  runtimes?: {
-    javascript?: boolean;
-    python?: boolean;
-    sqlite?: boolean;
-  };
-}
-
-export interface VirtualShellPolicy {
-  commands?: string[];
-  readableMounts?: string[];
-  writableMounts?: string[];
-  persistFilesystem?: false | "session";
-  runtimes?: {
-    javascript?: false;
-    python?: false;
-    sqlite?: false;
-  };
-}
-
 export interface SandboxCliTargetPolicy {
-  enabled: boolean;
-  mode?: "sandbox-cli" | "dual-run" | "rollback";
-  acceptedDifferences?: Array<"success" | "stdout" | "stderr" | "exitCode" | "errorCode">;
-  rollbackReason?: string;
-  migration?: {
-    status: "legacy" | "dual-run" | "sandbox-cli" | "rollback" | "retired";
-    pilot?: boolean;
-    ownerIssue?: string;
-    startedAt?: string;
-    completedAt?: string;
-    notes?: string;
-  };
+  enabled: true;
   manifest: string;
   binaryPath?: string;
   workspaceGuestRoot?: string;
@@ -73,8 +38,6 @@ export interface WasmToolTargetPolicy {
   network?: boolean;
   allowedHosts?: string[];
   capabilityTags?: string[];
-  virtualBash?: VirtualBashPolicy;
-  virtualShell?: VirtualShellPolicy;
   sandboxCli?: SandboxCliTargetPolicy;
 }
 
@@ -255,6 +218,8 @@ export interface ToolInvocationEnvelope {
   args: unknown[];
   mode: ToolInvocationMode;
   metadata: ToolInvocationMetadata;
+  requestedEnvVars?: string[];
+  requestedMaxOutputBytes?: number;
 }
 
 export interface ToolResultEnvelopeError {
@@ -506,6 +471,38 @@ export function toToolInvocationEnvelope(
       userId: request.audit.userId,
       apiKeyId: request.audit.apiKeyId ?? null,
     },
+    ...(request.requestedEnvVars !== undefined ? { requestedEnvVars: request.requestedEnvVars } : {}),
+    ...(request.requestedMaxOutputBytes !== undefined
+      ? { requestedMaxOutputBytes: request.requestedMaxOutputBytes }
+      : {}),
+  };
+}
+
+export function toToolcallRequestFromInvocation(
+  invocation: ToolInvocationEnvelope
+): ToolcallRequest {
+  return {
+    agentId: invocation.agentId,
+    visibleTool: invocation.metadata.visibleTool,
+    route: invocation.metadata.route,
+    ...(invocation.metadata.target !== undefined ? { target: invocation.metadata.target } : {}),
+    command: invocation.metadata.command,
+    args: invocation.args,
+    audit: {
+      userId: invocation.metadata.userId ?? null,
+      ...(invocation.metadata.apiKeyId !== undefined
+        ? { apiKeyId: invocation.metadata.apiKeyId }
+        : {}),
+      sessionId: invocation.sessionId,
+      toolCallId: invocation.callId,
+    },
+    runId: invocation.runId,
+    ...(invocation.requestedEnvVars !== undefined
+      ? { requestedEnvVars: invocation.requestedEnvVars }
+      : {}),
+    ...(invocation.requestedMaxOutputBytes !== undefined
+      ? { requestedMaxOutputBytes: invocation.requestedMaxOutputBytes }
+      : {}),
   };
 }
 
@@ -549,6 +546,34 @@ export function toToolResultEnvelope<T = unknown>(
     },
     durationMs,
     auditIds,
+  };
+}
+
+export function toLegacyToolcallResult<T = unknown>(
+  invocation: ToolInvocationEnvelope,
+  result: ToolResultEnvelope<T>
+): ToolcallResult<T> {
+  return {
+    success: result.status === "completed",
+    callId: result.callId,
+    visibleTool: invocation.metadata.visibleTool,
+    route: invocation.metadata.route,
+    ...(invocation.metadata.target !== undefined ? { target: invocation.metadata.target } : {}),
+    command: invocation.metadata.command,
+    ...(result.output !== undefined ? { output: result.output } : {}),
+    ...(result.error !== undefined
+      ? {
+          error: {
+            code: result.error.originalCode ?? result.error.kind,
+            message: result.error.message,
+          },
+        }
+      : {}),
+    audit: {
+      auditIds: result.auditIds,
+      durationMs: result.durationMs,
+      artifactIds: result.artifacts.map((artifact) => artifact.artifactId),
+    },
   };
 }
 
