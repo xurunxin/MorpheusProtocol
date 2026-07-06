@@ -124,6 +124,20 @@ export interface ToolRegistryPolicyBinding extends ToolRegistryExecutionTarget {
   visibleTool: string;
 }
 
+export type ToolRegistryExecutorType = "wasm" | "bash" | "tool" | "container";
+
+export interface ToolRegistryPolicyReference extends ToolRegistryExecutionTarget {
+  visibleTool: string;
+}
+
+export interface ToolRegistryMetadata {
+  capabilityId: string;
+  providerId: string;
+  executorType: ToolRegistryExecutorType;
+  riskLevel: ToolRiskLevel;
+  policyRef: ToolRegistryPolicyReference;
+}
+
 export interface ToolRegistryDeprecation {
   replacementToolId?: string;
   sinceVersion?: string;
@@ -140,6 +154,7 @@ export interface ToolRegistryEntry {
   capabilities: string[];
   executionTarget: ToolRegistryExecutionTarget;
   policyBinding: ToolRegistryPolicyBinding;
+  metadata?: ToolRegistryMetadata;
   deprecation?: ToolRegistryDeprecation;
 }
 
@@ -153,6 +168,7 @@ export interface DiscoveredTool {
   capabilities: string[];
   executionTarget: ToolRegistryExecutionTarget;
   policyBinding: ToolRegistryPolicyBinding;
+  metadata?: ToolRegistryMetadata;
   deprecation?: ToolRegistryDeprecation;
 }
 
