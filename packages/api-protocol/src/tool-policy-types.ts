@@ -39,6 +39,9 @@ export interface WasmToolTargetPolicy {
   network?: boolean;
   allowedHosts?: string[];
   capabilityTags?: string[];
+  riskLevel?: ToolRiskLevel;
+  approvalRequired?: boolean;
+  resourceScopes?: string[];
   sandboxCli?: SandboxCliTargetPolicy;
 }
 
@@ -61,6 +64,9 @@ export interface BashExecRoutePolicy {
 export interface ToolExecTargetPolicy {
   enabled: boolean;
   capabilityTags?: string[];
+  riskLevel?: ToolRiskLevel;
+  approvalRequired?: boolean;
+  resourceScopes?: string[];
   maxOutputBytes?: number;
 }
 
@@ -82,6 +88,10 @@ export interface ToolPolicySourceMetadata {
 export interface CapabilityAccessRule {
   allow?: string[];
   deny?: string[];
+  risk?: {
+    deny?: ToolRiskLevel[];
+    requireApproval?: ToolRiskLevel[];
+  };
 }
 
 export interface ToolPolicyDefinition {
@@ -193,6 +203,7 @@ export type ToolPolicyDecisionCode =
   | "TARGET_NOT_ALLOWED"
   | "CAPABILITY_NOT_ALLOWED"
   | "CAPABILITY_DENIED"
+  | "APPROVAL_REQUIRED"
   | "ENV_VAR_NOT_ALLOWED"
   | "QUOTA_EXHAUSTED"
   | "RATE_LIMITED"
@@ -255,6 +266,15 @@ export interface ToolResultEnvelope<T = unknown> {
   auditIds: string[];
 }
 
+export interface CapabilityPolicyAudit {
+  tags: string[];
+  riskLevel?: ToolRiskLevel;
+  approvalRequired: boolean;
+  resourceScopes: string[];
+  matchedAllow: string[];
+  matchedDeny: string[];
+}
+
 export interface ToolPolicyDecision {
   allow: boolean;
   code: ToolPolicyDecisionCode;
@@ -263,6 +283,7 @@ export interface ToolPolicyDecision {
   policyVersion: string | null;
   route?: ToolcallRoute;
   target?: string;
+  capabilityAudit?: CapabilityPolicyAudit;
   resolvedBackendConfig:
     | WasmToolTargetPolicy
     | BashExecRoutePolicy
@@ -413,6 +434,7 @@ const POLICY_DENIED_DECISION_CODES = new Set<ToolPolicyDecisionCode>([
   "TARGET_NOT_ALLOWED",
   "CAPABILITY_NOT_ALLOWED",
   "CAPABILITY_DENIED",
+  "APPROVAL_REQUIRED",
   "ENV_VAR_NOT_ALLOWED",
 ]);
 
@@ -638,6 +660,7 @@ function isToolPolicyDecisionCode(value: string): value is ToolPolicyDecisionCod
     value === "TARGET_NOT_ALLOWED" ||
     value === "CAPABILITY_NOT_ALLOWED" ||
     value === "CAPABILITY_DENIED" ||
+    value === "APPROVAL_REQUIRED" ||
     value === "ENV_VAR_NOT_ALLOWED" ||
     value === "QUOTA_EXHAUSTED" ||
     value === "RATE_LIMITED" ||
