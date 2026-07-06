@@ -26,6 +26,7 @@ export interface SandboxCliTargetPolicy {
   manifest: string;
   binaryPath?: string;
   workspaceGuestRoot?: string;
+  workspaceAccess?: "readOnly" | "readWrite";
 }
 
 export interface WasmToolTargetPolicy {
