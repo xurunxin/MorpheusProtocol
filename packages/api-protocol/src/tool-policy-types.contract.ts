@@ -55,7 +55,7 @@ const _definition = {
             network: false,
             sandboxCli: {
               enabled: true,
-              manifest: "packages/sandbox-cli/fixtures/grep/sandbox-artifact.json",
+              manifest: "packages/sandbox-cli/tools/prebuilt/virtual-shell/sandbox-artifact.json",
             },
           },
         },
