@@ -94,6 +94,34 @@ export interface CapabilityAccessRule {
   };
 }
 
+export type LocalCapabilityGrantStatus = "active" | "revoked";
+
+export type LocalCapability =
+  | "local.provider"
+  | "local.workspace"
+  | "local.filesystem"
+  | "browser.control"
+  | "desktop.control";
+
+export interface LocalCapabilityGrant {
+  id: string;
+  capability: LocalCapability;
+  subjectId: string;
+  status: LocalCapabilityGrantStatus;
+  resourceScopes: string[];
+  createdAt: string;
+  expiresAt?: string;
+  revokedAt?: string;
+}
+
+export interface CreateLocalCapabilityGrantRequest {
+  id?: string;
+  capability: LocalCapability;
+  subjectId: string;
+  resourceScopes: string[];
+  expiresAt?: string;
+}
+
 export interface ToolPolicyDefinition {
   schemaVersion: 2;
   tools: {
