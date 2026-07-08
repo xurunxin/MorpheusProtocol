@@ -276,6 +276,7 @@ export interface ToolInvocationEnvelope {
   metadata: ToolInvocationMetadata;
   requestedEnvVars?: string[];
   requestedMaxOutputBytes?: number;
+  resourceScopes?: string[];
 }
 
 export interface ToolResultEnvelopeError {
@@ -334,6 +335,7 @@ export interface ToolcallRequest {
     toolCallId: string;
   };
   runId?: string;
+  resourceScopes?: string[];
   requestedEnvVars?: string[];
   requestedMaxOutputBytes?: number;
 }
@@ -394,6 +396,7 @@ export interface ToolPolicySimulationRequest {
   target?: string;
   requestedEnvVars?: string[];
   requestedMaxOutputBytes?: number;
+  resourceScopes?: string[];
   policy?: ToolPolicy;
   definition?: ToolPolicyDefinition;
   capabilityTags?: CapabilityTag[];
@@ -544,6 +547,7 @@ export function toToolInvocationEnvelope(
     ...(request.requestedMaxOutputBytes !== undefined
       ? { requestedMaxOutputBytes: request.requestedMaxOutputBytes }
       : {}),
+    ...(request.resourceScopes !== undefined ? { resourceScopes: request.resourceScopes } : {}),
   };
 }
 
@@ -566,6 +570,9 @@ export function toToolcallRequestFromInvocation(
       toolCallId: invocation.callId,
     },
     runId: invocation.runId,
+    ...(invocation.resourceScopes !== undefined
+      ? { resourceScopes: invocation.resourceScopes }
+      : {}),
     ...(invocation.requestedEnvVars !== undefined
       ? { requestedEnvVars: invocation.requestedEnvVars }
       : {}),
