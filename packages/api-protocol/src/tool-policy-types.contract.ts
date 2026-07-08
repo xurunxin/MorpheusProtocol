@@ -142,6 +142,7 @@ const _request = {
   runId: "run-1",
   requestedEnvVars: ["PATH"],
   requestedMaxOutputBytes: 65536,
+  resourceScopes: ["workspace:w1"],
 } satisfies ToolcallRequest;
 
 const _result = {
@@ -164,6 +165,7 @@ const _invocationEnvelope = {
   args: ["foo", "README.md"],
   mode: "agent",
   metadata: _metadata,
+  resourceScopes: ["workspace:w1"],
 } satisfies ToolInvocationEnvelope;
 
 const _resultEnvelope = {
