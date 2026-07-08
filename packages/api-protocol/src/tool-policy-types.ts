@@ -265,6 +265,36 @@ export interface ToolInvocationMetadata {
   apiKeyId?: string | null;
 }
 
+export type ToolApprovalStatus =
+  | "not_required"
+  | "missing_marker"
+  | "requested"
+  | "approved"
+  | "denied"
+  | "expired";
+
+export interface ToolApprovalMarker {
+  status: Exclude<ToolApprovalStatus, "not_required" | "missing_marker">;
+  approvalId?: string;
+  approvedBy?: string;
+  deniedBy?: string;
+  decidedAt?: string;
+  requestedAt?: string;
+  expiresAt?: string;
+  reason?: string;
+}
+
+export interface ToolApprovalDecisionMetadata {
+  status: ToolApprovalStatus;
+  approvalId: string;
+  approvedBy?: string;
+  deniedBy?: string;
+  decidedAt?: string;
+  requestedAt?: string;
+  expiresAt?: string;
+  reason: string;
+}
+
 export interface ToolInvocationEnvelope {
   toolId: string;
   callId: string;
@@ -277,6 +307,7 @@ export interface ToolInvocationEnvelope {
   requestedEnvVars?: string[];
   requestedMaxOutputBytes?: number;
   resourceScopes?: string[];
+  approval?: ToolApprovalMarker;
 }
 
 export interface ToolResultEnvelopeError {
@@ -313,6 +344,7 @@ export interface ToolPolicyDecision {
   route?: ToolcallRoute;
   target?: string;
   capabilityAudit?: CapabilityPolicyAudit;
+  approval?: ToolApprovalDecisionMetadata;
   resolvedBackendConfig:
     | WasmToolTargetPolicy
     | BashExecRoutePolicy
@@ -336,6 +368,7 @@ export interface ToolcallRequest {
   };
   runId?: string;
   resourceScopes?: string[];
+  approval?: ToolApprovalMarker;
   requestedEnvVars?: string[];
   requestedMaxOutputBytes?: number;
 }
@@ -397,6 +430,7 @@ export interface ToolPolicySimulationRequest {
   requestedEnvVars?: string[];
   requestedMaxOutputBytes?: number;
   resourceScopes?: string[];
+  approval?: ToolApprovalMarker;
   policy?: ToolPolicy;
   definition?: ToolPolicyDefinition;
   capabilityTags?: CapabilityTag[];
@@ -548,6 +582,7 @@ export function toToolInvocationEnvelope(
       ? { requestedMaxOutputBytes: request.requestedMaxOutputBytes }
       : {}),
     ...(request.resourceScopes !== undefined ? { resourceScopes: request.resourceScopes } : {}),
+    ...(request.approval !== undefined ? { approval: request.approval } : {}),
   };
 }
 
@@ -573,6 +608,7 @@ export function toToolcallRequestFromInvocation(
     ...(invocation.resourceScopes !== undefined
       ? { resourceScopes: invocation.resourceScopes }
       : {}),
+    ...(invocation.approval !== undefined ? { approval: invocation.approval } : {}),
     ...(invocation.requestedEnvVars !== undefined
       ? { requestedEnvVars: invocation.requestedEnvVars }
       : {}),
