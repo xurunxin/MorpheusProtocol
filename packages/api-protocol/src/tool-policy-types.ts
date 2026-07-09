@@ -1,4 +1,5 @@
 import type { CapabilityTag } from "./agent-registry-types.js";
+import type { AgentOpsToolTrustStatus } from "./agentops-control-plane-types.js";
 import type { BreakerState } from "./quota-types.js";
 import type { ToolRiskLevel } from "./observability-types.js";
 
@@ -232,6 +233,9 @@ export type ToolPolicyDecisionCode =
   | "CAPABILITY_NOT_ALLOWED"
   | "CAPABILITY_DENIED"
   | "APPROVAL_REQUIRED"
+  | "TOOL_TRUST_QUARANTINED"
+  | "TOOL_TRUST_REVOKED"
+  | "TOOL_TRUST_REVIEW_REQUIRED"
   | "ENV_VAR_NOT_ALLOWED"
   | "QUOTA_EXHAUSTED"
   | "RATE_LIMITED"
@@ -345,6 +349,11 @@ export interface ToolPolicyDecision {
   target?: string;
   capabilityAudit?: CapabilityPolicyAudit;
   approval?: ToolApprovalDecisionMetadata;
+  trustAudit?: {
+    toolId: string;
+    providerId?: string;
+    status: AgentOpsToolTrustStatus | "missing";
+  };
   resolvedBackendConfig:
     | WasmToolTargetPolicy
     | BashExecRoutePolicy
@@ -500,6 +509,9 @@ const POLICY_DENIED_DECISION_CODES = new Set<ToolPolicyDecisionCode>([
   "CAPABILITY_NOT_ALLOWED",
   "CAPABILITY_DENIED",
   "APPROVAL_REQUIRED",
+  "TOOL_TRUST_QUARANTINED",
+  "TOOL_TRUST_REVOKED",
+  "TOOL_TRUST_REVIEW_REQUIRED",
   "ENV_VAR_NOT_ALLOWED",
 ]);
 
@@ -732,6 +744,9 @@ function isToolPolicyDecisionCode(value: string): value is ToolPolicyDecisionCod
     value === "CAPABILITY_NOT_ALLOWED" ||
     value === "CAPABILITY_DENIED" ||
     value === "APPROVAL_REQUIRED" ||
+    value === "TOOL_TRUST_QUARANTINED" ||
+    value === "TOOL_TRUST_REVOKED" ||
+    value === "TOOL_TRUST_REVIEW_REQUIRED" ||
     value === "ENV_VAR_NOT_ALLOWED" ||
     value === "QUOTA_EXHAUSTED" ||
     value === "RATE_LIMITED" ||
