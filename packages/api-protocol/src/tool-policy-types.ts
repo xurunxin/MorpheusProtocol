@@ -5,7 +5,11 @@ import type { ToolRiskLevel } from "./observability-types.js";
 
 export type ToolPolicyStatus = "active" | "deprecated" | "draft";
 
-export type ToolcallRoute = "wasm.exec" | "bash.exec" | "tool.exec" | "container.exec";
+export const TOOLCALL_ROUTES = ["wasm.exec", "bash.exec", "tool.exec", "container.exec"] as const;
+export type ToolcallRoute = (typeof TOOLCALL_ROUTES)[number];
+export function isToolcallRoute(value: unknown): value is ToolcallRoute {
+  return typeof value === "string" && TOOLCALL_ROUTES.includes(value as ToolcallRoute);
+}
 
 export interface ToolRouteBinding {
   route: ToolcallRoute;
