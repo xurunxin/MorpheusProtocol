@@ -1,3 +1,4 @@
+import { isToolcallRoute } from "@morpheus/api-protocol";
 import type {
   SandboxCliTargetPolicy,
   ToolRegistryExecutorType,
@@ -471,15 +472,6 @@ function isToolRegistryExecutorType(value: unknown): value is ToolRegistryExecut
 
 function isSupportedProviderExecutorType(value: unknown): value is SupportedProviderExecutorType {
   return value === "wasm" || value === "tool";
-}
-
-function isToolcallRoute(value: unknown): value is ToolcallRoute {
-  return (
-    value === "wasm.exec" ||
-    value === "bash.exec" ||
-    value === "tool.exec" ||
-    value === "container.exec"
-  );
 }
 
 function isSupportedProviderRoute(value: unknown): value is SupportedProviderToolcallRoute {

@@ -1,10 +1,15 @@
 import type { CapabilityTag } from "./agent-registry-types.js";
+import type { AgentOpsToolTrustStatus } from "./agentops-control-plane-types.js";
 import type { BreakerState } from "./quota-types.js";
 import type { ToolRiskLevel } from "./observability-types.js";
 
 export type ToolPolicyStatus = "active" | "deprecated" | "draft";
 
-export type ToolcallRoute = "wasm.exec" | "bash.exec" | "tool.exec" | "container.exec";
+export const TOOLCALL_ROUTES = ["wasm.exec", "bash.exec", "tool.exec", "container.exec"] as const;
+export type ToolcallRoute = (typeof TOOLCALL_ROUTES)[number];
+export function isToolcallRoute(value: unknown): value is ToolcallRoute {
+  return typeof value === "string" && TOOLCALL_ROUTES.includes(value as ToolcallRoute);
+}
 
 export interface ToolRouteBinding {
   route: ToolcallRoute;
@@ -232,6 +237,9 @@ export type ToolPolicyDecisionCode =
   | "CAPABILITY_NOT_ALLOWED"
   | "CAPABILITY_DENIED"
   | "APPROVAL_REQUIRED"
+  | "TOOL_TRUST_QUARANTINED"
+  | "TOOL_TRUST_REVOKED"
+  | "TOOL_TRUST_REVIEW_REQUIRED"
   | "ENV_VAR_NOT_ALLOWED"
   | "QUOTA_EXHAUSTED"
   | "RATE_LIMITED"
@@ -265,6 +273,36 @@ export interface ToolInvocationMetadata {
   apiKeyId?: string | null;
 }
 
+export type ToolApprovalStatus =
+  | "not_required"
+  | "missing_marker"
+  | "requested"
+  | "approved"
+  | "denied"
+  | "expired";
+
+export interface ToolApprovalMarker {
+  status: Exclude<ToolApprovalStatus, "not_required" | "missing_marker">;
+  approvalId?: string;
+  approvedBy?: string;
+  deniedBy?: string;
+  decidedAt?: string;
+  requestedAt?: string;
+  expiresAt?: string;
+  reason?: string;
+}
+
+export interface ToolApprovalDecisionMetadata {
+  status: ToolApprovalStatus;
+  approvalId: string;
+  approvedBy?: string;
+  deniedBy?: string;
+  decidedAt?: string;
+  requestedAt?: string;
+  expiresAt?: string;
+  reason: string;
+}
+
 export interface ToolInvocationEnvelope {
   toolId: string;
   callId: string;
@@ -276,6 +314,8 @@ export interface ToolInvocationEnvelope {
   metadata: ToolInvocationMetadata;
   requestedEnvVars?: string[];
   requestedMaxOutputBytes?: number;
+  resourceScopes?: string[];
+  approval?: ToolApprovalMarker;
 }
 
 export interface ToolResultEnvelopeError {
@@ -312,6 +352,12 @@ export interface ToolPolicyDecision {
   route?: ToolcallRoute;
   target?: string;
   capabilityAudit?: CapabilityPolicyAudit;
+  approval?: ToolApprovalDecisionMetadata;
+  trustAudit?: {
+    toolId: string;
+    providerId?: string;
+    status: AgentOpsToolTrustStatus | "missing";
+  };
   resolvedBackendConfig:
     | WasmToolTargetPolicy
     | BashExecRoutePolicy
@@ -334,6 +380,8 @@ export interface ToolcallRequest {
     toolCallId: string;
   };
   runId?: string;
+  resourceScopes?: string[];
+  approval?: ToolApprovalMarker;
   requestedEnvVars?: string[];
   requestedMaxOutputBytes?: number;
 }
@@ -394,6 +442,8 @@ export interface ToolPolicySimulationRequest {
   target?: string;
   requestedEnvVars?: string[];
   requestedMaxOutputBytes?: number;
+  resourceScopes?: string[];
+  approval?: ToolApprovalMarker;
   policy?: ToolPolicy;
   definition?: ToolPolicyDefinition;
   capabilityTags?: CapabilityTag[];
@@ -463,6 +513,9 @@ const POLICY_DENIED_DECISION_CODES = new Set<ToolPolicyDecisionCode>([
   "CAPABILITY_NOT_ALLOWED",
   "CAPABILITY_DENIED",
   "APPROVAL_REQUIRED",
+  "TOOL_TRUST_QUARANTINED",
+  "TOOL_TRUST_REVOKED",
+  "TOOL_TRUST_REVIEW_REQUIRED",
   "ENV_VAR_NOT_ALLOWED",
 ]);
 
@@ -544,6 +597,8 @@ export function toToolInvocationEnvelope(
     ...(request.requestedMaxOutputBytes !== undefined
       ? { requestedMaxOutputBytes: request.requestedMaxOutputBytes }
       : {}),
+    ...(request.resourceScopes !== undefined ? { resourceScopes: request.resourceScopes } : {}),
+    ...(request.approval !== undefined ? { approval: request.approval } : {}),
   };
 }
 
@@ -566,6 +621,10 @@ export function toToolcallRequestFromInvocation(
       toolCallId: invocation.callId,
     },
     runId: invocation.runId,
+    ...(invocation.resourceScopes !== undefined
+      ? { resourceScopes: invocation.resourceScopes }
+      : {}),
+    ...(invocation.approval !== undefined ? { approval: invocation.approval } : {}),
     ...(invocation.requestedEnvVars !== undefined
       ? { requestedEnvVars: invocation.requestedEnvVars }
       : {}),
@@ -689,6 +748,9 @@ function isToolPolicyDecisionCode(value: string): value is ToolPolicyDecisionCod
     value === "CAPABILITY_NOT_ALLOWED" ||
     value === "CAPABILITY_DENIED" ||
     value === "APPROVAL_REQUIRED" ||
+    value === "TOOL_TRUST_QUARANTINED" ||
+    value === "TOOL_TRUST_REVOKED" ||
+    value === "TOOL_TRUST_REVIEW_REQUIRED" ||
     value === "ENV_VAR_NOT_ALLOWED" ||
     value === "QUOTA_EXHAUSTED" ||
     value === "RATE_LIMITED" ||

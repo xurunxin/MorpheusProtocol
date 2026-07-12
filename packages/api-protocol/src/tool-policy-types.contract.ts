@@ -128,6 +128,12 @@ const _decision = {
   policyVersion: "1.0.0",
   route: "wasm.exec",
   target: "grep",
+  approval: {
+    status: "requested",
+    approvalId: "approval-1",
+    requestedAt: "2026-07-09T00:00:00.000Z",
+    reason: "Approval required",
+  },
   resolvedBackendConfig: null,
 } satisfies ToolPolicyDecision;
 
@@ -142,6 +148,13 @@ const _request = {
   runId: "run-1",
   requestedEnvVars: ["PATH"],
   requestedMaxOutputBytes: 65536,
+  resourceScopes: ["workspace:w1"],
+  approval: {
+    status: "approved",
+    approvalId: "approval-1",
+    approvedBy: "u-2",
+    decidedAt: "2026-07-09T00:00:00.000Z",
+  },
 } satisfies ToolcallRequest;
 
 const _result = {
@@ -164,6 +177,13 @@ const _invocationEnvelope = {
   args: ["foo", "README.md"],
   mode: "agent",
   metadata: _metadata,
+  resourceScopes: ["workspace:w1"],
+  approval: {
+    status: "approved",
+    approvalId: "approval-1",
+    approvedBy: "u-2",
+    decidedAt: "2026-07-09T00:00:00.000Z",
+  },
 } satisfies ToolInvocationEnvelope;
 
 const _resultEnvelope = {
