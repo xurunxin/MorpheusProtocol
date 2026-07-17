@@ -3,6 +3,7 @@ import type { AgentOpsToolTrustStatus } from "./agentops-control-plane-types.js"
 import type { EffectiveCapabilitySnapshotV1 } from "./effective-capability-types.js";
 import type { BreakerState } from "./quota-types.js";
 import type { ToolRiskLevel } from "./observability-types.js";
+import type { ProviderExecutionBinding } from "./provider-registry-types.js";
 
 export type ToolPolicyStatus = "active" | "deprecated" | "draft";
 
@@ -177,6 +178,8 @@ export interface ToolRegistryPolicyReference extends ToolRegistryExecutionTarget
 export interface ToolRegistryMetadata {
   capabilityId: string;
   providerId: string;
+  /** 发现时固定的 Provider 版本，执行前必须由受信任 resolver 重新验证。 */
+  providerBinding?: ProviderExecutionBinding;
   executorType: ToolRegistryExecutorType;
   riskLevel: ToolRiskLevel;
   policyRef: ToolRegistryPolicyReference;
@@ -265,6 +268,14 @@ export type ToolPolicyDecisionCode =
   | "CAPABILITY_DENIED"
   | "EFFECTIVE_CAPABILITY_DENIED"
   | "EFFECTIVE_CAPABILITY_UNKNOWN"
+  | "PROVIDER_BINDING_MISSING"
+  | "PROVIDER_NOT_FOUND"
+  | "PROVIDER_VERSION_MISMATCH"
+  | "PROVIDER_INACTIVE"
+  | "PROVIDER_FAILED"
+  | "PROVIDER_UNHEALTHY"
+  | "PROVIDER_UNKNOWN"
+  | "PROVIDER_RESOLVER_UNAVAILABLE"
   | "APPROVAL_REQUIRED"
   | "TOOL_TRUST_QUARANTINED"
   | "TOOL_TRUST_REVOKED"
