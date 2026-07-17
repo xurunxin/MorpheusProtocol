@@ -105,6 +105,12 @@ export interface CapabilityAccessRule {
 export type LocalCapabilityGrantStatus = "active" | "revoked";
 
 export type LocalCapability =
+  | "filesystem.read"
+  | "filesystem.write"
+  | "process.spawn"
+  | "network.egress"
+  | "provider.use"
+  /** Legacy coarse tags remain readable for persisted policy compatibility. */
   | "local.provider"
   | "local.workspace"
   | "local.filesystem"
@@ -120,6 +126,7 @@ export interface LocalCapabilityGrant {
   createdAt: string;
   expiresAt?: string;
   revokedAt?: string;
+  revision: number;
 }
 
 export interface CreateLocalCapabilityGrantRequest {
@@ -128,6 +135,18 @@ export interface CreateLocalCapabilityGrantRequest {
   subjectId: string;
   resourceScopes: string[];
   expiresAt?: string;
+}
+
+export interface RevokeLocalCapabilityGrantRequest {
+  expectedRevision: number;
+}
+
+export interface LocalCapabilityGrantResponse {
+  grant: LocalCapabilityGrant;
+}
+
+export interface LocalCapabilityGrantListResponse {
+  grants: LocalCapabilityGrant[];
 }
 
 export interface ToolPolicyDefinition {
