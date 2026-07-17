@@ -75,6 +75,7 @@ const _definition = {
 
 const bashRoute = {
   enabled: true,
+  approvalRequired: true,
   mode: "restricted",
   allowedScripts: ["node", "bun"],
   skillScriptDirs: ["config/skills", "config/skills/user"],
