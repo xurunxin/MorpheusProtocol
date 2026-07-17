@@ -59,6 +59,7 @@ export interface WasmExecRoutePolicy {
 
 export interface BashExecRoutePolicy {
   enabled: boolean;
+  approvalRequired?: boolean;
   mode?: "restricted" | "full";
   allowedScripts?: string[];
   skillScriptDirs?: string[];
