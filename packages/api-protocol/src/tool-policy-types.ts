@@ -59,6 +59,7 @@ export interface WasmExecRoutePolicy {
 
 export interface BashExecRoutePolicy {
   enabled: boolean;
+  approvalRequired?: boolean;
   mode?: "restricted" | "full";
   allowedScripts?: string[];
   skillScriptDirs?: string[];
@@ -156,6 +157,15 @@ export interface ToolPolicy {
   definition: ToolPolicyDefinition;
   createdAt: string;
   updatedAt: string;
+}
+
+/** Frozen run-scoped policy ceiling plus the source identity used for live CAS validation. */
+export interface ToolPolicyExecutionSnapshot {
+  id: string;
+  version: string;
+  sourceFingerprint: string;
+  fingerprint: string;
+  definition: Readonly<ToolPolicyDefinition>;
 }
 
 export type ToolRegistrySource = "builtin" | "skill" | "mcp" | "plugin";
