@@ -202,6 +202,30 @@ export interface ToolRegistryEntry {
   deprecation?: ToolRegistryDeprecation;
 }
 
+/**
+ * 返回 registry 条目声明的能力与当前策略目标补充能力的规范并集。
+ *
+ * discovery、有效权限快照和执行 gate 必须共用这一解析规则，避免同一工具
+ * 在不同阶段被赋予不同的 capability 语义。
+ */
+export function resolveToolRegistryEntryCapabilities(
+  entry: ToolRegistryEntry,
+  policy: ToolPolicyDefinition | undefined
+): string[] {
+  const target = entry.executionTarget.target;
+  let policyCapabilities: readonly string[] = [];
+
+  if (target !== undefined && entry.executionTarget.route === "tool.exec") {
+    policyCapabilities =
+      policy?.execution.routes["tool.exec"]?.tools?.[target]?.capabilityTags ?? [];
+  } else if (target !== undefined && entry.executionTarget.route === "wasm.exec") {
+    policyCapabilities =
+      policy?.execution.routes["wasm.exec"]?.tools?.[target]?.capabilityTags ?? [];
+  }
+
+  return [...new Set([...entry.capabilities, ...policyCapabilities])];
+}
+
 export interface DiscoveredTool {
   id: string;
   version: string;
