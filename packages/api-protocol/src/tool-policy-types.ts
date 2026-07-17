@@ -1,5 +1,6 @@
 import type { CapabilityTag } from "./agent-registry-types.js";
 import type { AgentOpsToolTrustStatus } from "./agentops-control-plane-types.js";
+import type { EffectiveCapabilitySnapshotV1 } from "./effective-capability-types.js";
 import type { BreakerState } from "./quota-types.js";
 import type { ToolRiskLevel } from "./observability-types.js";
 
@@ -201,6 +202,30 @@ export interface ToolRegistryEntry {
   deprecation?: ToolRegistryDeprecation;
 }
 
+/**
+ * 返回 registry 条目声明的能力与当前策略目标补充能力的规范并集。
+ *
+ * discovery、有效权限快照和执行 gate 必须共用这一解析规则，避免同一工具
+ * 在不同阶段被赋予不同的 capability 语义。
+ */
+export function resolveToolRegistryEntryCapabilities(
+  entry: ToolRegistryEntry,
+  policy: ToolPolicyDefinition | undefined
+): string[] {
+  const target = entry.executionTarget.target;
+  let policyCapabilities: readonly string[] = [];
+
+  if (target !== undefined && entry.executionTarget.route === "tool.exec") {
+    policyCapabilities =
+      policy?.execution.routes["tool.exec"]?.tools?.[target]?.capabilityTags ?? [];
+  } else if (target !== undefined && entry.executionTarget.route === "wasm.exec") {
+    policyCapabilities =
+      policy?.execution.routes["wasm.exec"]?.tools?.[target]?.capabilityTags ?? [];
+  }
+
+  return [...new Set([...entry.capabilities, ...policyCapabilities])];
+}
+
 export interface DiscoveredTool {
   id: string;
   version: string;
@@ -218,6 +243,8 @@ export interface DiscoveredTool {
 export interface ToolDiscoveryRequest {
   policy: ToolPolicyDefinition;
   capabilityTags?: string[];
+  /** Server-resolved effective authority. Omitted only by non-server compatibility callers. */
+  effectiveCapabilitySnapshot?: EffectiveCapabilitySnapshotV1 | undefined;
 }
 
 export interface ToolDiscoveryResponse {
@@ -236,6 +263,8 @@ export type ToolPolicyDecisionCode =
   | "TARGET_NOT_ALLOWED"
   | "CAPABILITY_NOT_ALLOWED"
   | "CAPABILITY_DENIED"
+  | "EFFECTIVE_CAPABILITY_DENIED"
+  | "EFFECTIVE_CAPABILITY_UNKNOWN"
   | "APPROVAL_REQUIRED"
   | "TOOL_TRUST_QUARANTINED"
   | "TOOL_TRUST_REVOKED"
@@ -512,6 +541,8 @@ const POLICY_DENIED_DECISION_CODES = new Set<ToolPolicyDecisionCode>([
   "TARGET_NOT_ALLOWED",
   "CAPABILITY_NOT_ALLOWED",
   "CAPABILITY_DENIED",
+  "EFFECTIVE_CAPABILITY_DENIED",
+  "EFFECTIVE_CAPABILITY_UNKNOWN",
   "APPROVAL_REQUIRED",
   "TOOL_TRUST_QUARANTINED",
   "TOOL_TRUST_REVOKED",
@@ -747,6 +778,8 @@ function isToolPolicyDecisionCode(value: string): value is ToolPolicyDecisionCod
     value === "TARGET_NOT_ALLOWED" ||
     value === "CAPABILITY_NOT_ALLOWED" ||
     value === "CAPABILITY_DENIED" ||
+    value === "EFFECTIVE_CAPABILITY_DENIED" ||
+    value === "EFFECTIVE_CAPABILITY_UNKNOWN" ||
     value === "APPROVAL_REQUIRED" ||
     value === "TOOL_TRUST_QUARANTINED" ||
     value === "TOOL_TRUST_REVOKED" ||
