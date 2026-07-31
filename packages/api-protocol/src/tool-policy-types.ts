@@ -83,6 +83,21 @@ export interface ToolExecRoutePolicy {
   tools?: Record<string, ToolExecTargetPolicy>;
 }
 
+export interface ContainerExecRecipePolicy {
+  enabled: boolean;
+  capabilityTags?: string[];
+  riskLevel?: ToolRiskLevel;
+  approvalRequired?: boolean;
+  resourceScopes?: string[];
+  timeoutMs?: number;
+  maxOutputBytes?: number;
+}
+
+export interface ContainerExecRoutePolicy {
+  enabled: boolean;
+  recipes?: Record<string, ContainerExecRecipePolicy>;
+}
+
 export interface BackendPolicyPlaceholder {
   enabled: boolean;
 }
@@ -161,7 +176,7 @@ export interface ToolPolicyDefinition {
       "wasm.exec": WasmExecRoutePolicy;
       "bash.exec": BashExecRoutePolicy;
       "tool.exec": ToolExecRoutePolicy;
-      "container.exec": BackendPolicyPlaceholder;
+      "container.exec": ContainerExecRoutePolicy;
     }>;
   };
   capabilityAccess?: CapabilityAccessRule;
@@ -431,6 +446,7 @@ export interface ToolPolicyDecision {
     | WasmToolTargetPolicy
     | BashExecRoutePolicy
     | ToolExecTargetPolicy
+    | ContainerExecRecipePolicy
     | BackendPolicyPlaceholder
     | null;
 }
