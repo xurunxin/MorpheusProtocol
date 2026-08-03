@@ -178,13 +178,15 @@ describe("agent core projected SSE v2 contract", () => {
     ).toThrow(AgentCoreProjectedSseProtocolError);
   });
 
-  it("sends exact headers, yields error then done, and parses typed non-2xx errors", async () => {
+  it("uses encoded canonical AgentRef, sends exact headers, and parses typed errors", async () => {
+    let requestedUrl: string | URL | Request | undefined;
     let init: RequestInit | undefined;
     const frames = `${wire(event("error", { code: "FAILED", message: "safe" }))}${wire(event("done", { sessionId: "session-1" }, 3))}`;
     const client = createAgentCoreProjectedSseClient({
       baseUrl: "https://example.test/",
       apiKey: "key-1",
-      fetch: async (_url, request) => {
+      fetch: async (url, request) => {
+        requestedUrl = url;
         init = request;
         return response(frames);
       },
@@ -198,6 +200,9 @@ describe("agent core projected SSE v2 contract", () => {
       delivered.push(frame.event);
     }
     expect(delivered).toEqual(["error", "done"]);
+    expect(String(requestedUrl)).toBe(
+      "https://example.test/api/v1/agents/by-ref/agent%2Fa/prompt/stream"
+    );
     expect(init?.headers).toEqual({
       "X-API-Key": "key-1",
       "Content-Type": "application/json",

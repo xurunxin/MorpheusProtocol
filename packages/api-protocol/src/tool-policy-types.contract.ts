@@ -28,18 +28,15 @@ const _metadata = {
 
 const _definition = {
   schemaVersion: 2,
-  tools: { allowed: ["read", "bash"] },
+  tools: { allowed: ["read", "workspace_files"] },
   execution: {
     defaults: {
       maxOutputBytes: 65536,
       allowedEnvVars: ["PATH"],
     },
     bindings: {
-      bash: {
-        default: { route: "bash.exec" },
-        commands: {
-          grep: { route: "wasm.exec", target: "grep" },
-        },
+      workspace_files: {
+        default: { route: "wasm.exec", target: "workspace-files" },
       },
       read: {
         default: { route: "tool.exec", target: "builtin.read" },
@@ -49,13 +46,15 @@ const _definition = {
       "wasm.exec": {
         enabled: true,
         tools: {
-          grep: {
+          "workspace-files": {
             enabled: true,
+            command: "run",
             preopens: ["/workspace"],
             network: false,
             sandboxCli: {
               enabled: true,
-              manifest: "packages/sandbox-cli/tools/prebuilt/virtual-shell/sandbox-artifact.json",
+              manifest: "packages/sandbox-cli/tools/prebuilt/workspace-files/sandbox-artifact.json",
+              workspaceAccess: "readWrite",
             },
           },
         },
@@ -67,7 +66,7 @@ const _definition = {
   },
   capabilityAccess: { allow: ["code.*"], deny: ["code.refactor"] },
   source: {
-    origin: "migration",
+    origin: "yaml",
     yamlPath: "config/agents/default.yaml",
     yamlHash: "sha256:demo",
   },

@@ -27,7 +27,7 @@ export interface AgentCoreProjectedSseStreamOptions {
 
 export interface AgentCoreProjectedSseClient {
   streamPrompt(
-    agentId: string,
+    agentRef: string,
     request: AgentCoreProjectedPromptStreamRequest,
     options?: AgentCoreProjectedSseStreamOptions
   ): AsyncIterable<AgentCoreProjectedSseEvent>;
@@ -46,11 +46,11 @@ export function createAgentCoreProjectedSseClient(
   const fetchImpl = options.fetch ?? fetch;
   return Object.freeze({
     streamPrompt(
-      agentId: string,
+      agentRef: string,
       request: AgentCoreProjectedPromptStreamRequest,
       streamOptions: AgentCoreProjectedSseStreamOptions = {}
     ) {
-      return stream(baseUrl, options.apiKey, fetchImpl, agentId, request, streamOptions);
+      return stream(baseUrl, options.apiKey, fetchImpl, agentRef, request, streamOptions);
     },
   });
 }
@@ -59,13 +59,13 @@ async function* stream(
   baseUrl: string,
   apiKey: string,
   fetchImpl: typeof fetch,
-  agentId: string,
+  agentRef: string,
   requestInput: AgentCoreProjectedPromptStreamRequest,
   options: AgentCoreProjectedSseStreamOptions
 ): AsyncGenerator<AgentCoreProjectedSseEvent> {
   const request = parseAgentCoreProjectedPromptStreamRequest(requestInput);
-  if (agentId.length === 0) {
-    throw new AgentCoreProjectedSseProtocolError("INVALID_REQUEST", "agentId must not be empty");
+  if (agentRef.length === 0) {
+    throw new AgentCoreProjectedSseProtocolError("INVALID_REQUEST", "agentRef must not be empty");
   }
   if (
     options.lastEventId !== undefined &&
@@ -77,7 +77,7 @@ async function* stream(
   let reader: { cancel(): Promise<void>; releaseLock?(): void } | undefined;
   try {
     const response = await fetchImpl(
-      `${baseUrl}/api/v2/agents/${encodeURIComponent(agentId)}/prompt/stream`,
+      `${baseUrl}/api/v1/agents/by-ref/${encodeURIComponent(agentRef)}/prompt/stream`,
       {
         method: "POST",
         headers: {
