@@ -103,7 +103,7 @@ export interface BackendPolicyPlaceholder {
 }
 
 export interface ToolPolicySourceMetadata {
-  origin?: "yaml" | "api" | "migration" | "builtin";
+  origin?: "yaml" | "api" | "builtin";
   yamlPath?: string;
   yamlHash?: string;
 }
@@ -125,7 +125,6 @@ export type LocalCapability =
   | "process.spawn"
   | "network.egress"
   | "provider.use"
-  /** Legacy coarse tags remain readable for persisted policy compatibility. */
   | "local.provider"
   | "local.workspace"
   | "local.filesystem"
@@ -290,8 +289,8 @@ export interface DiscoveredTool {
 export interface ToolDiscoveryRequest {
   policy: ToolPolicyDefinition;
   capabilityTags?: string[];
-  /** Server-resolved effective authority. Omitted only by non-server compatibility callers. */
-  effectiveCapabilitySnapshot?: EffectiveCapabilitySnapshotV1 | undefined;
+  /** Server-resolved effective authority. Discovery without it is fail-closed. */
+  effectiveCapabilitySnapshot: Readonly<EffectiveCapabilitySnapshotV1>;
 }
 
 export interface ToolDiscoveryResponse {
@@ -606,7 +605,7 @@ const POLICY_DENIED_DECISION_CODES = new Set<ToolPolicyDecisionCode>([
   "ENV_VAR_NOT_ALLOWED",
 ]);
 
-const LEGACY_POLICY_DENIED_CODES = new Set<string>([
+const ADDITIONAL_POLICY_DENIED_CODES = new Set<string>([
   "SCRIPT_NOT_ALLOWED",
   "TOOL_DISABLED_IN_SANDBOX",
 ]);
@@ -639,7 +638,7 @@ export function mapToolPolicyDecisionCodeToInvocationErrorKind(
   if (
     (isToolPolicyDecisionCode(normalizedCode) &&
       POLICY_DENIED_DECISION_CODES.has(normalizedCode)) ||
-    LEGACY_POLICY_DENIED_CODES.has(normalizedCode)
+    ADDITIONAL_POLICY_DENIED_CODES.has(normalizedCode)
   ) {
     return "policy_denied";
   }
