@@ -38,7 +38,7 @@ const RFC3339_MILLIS_PATTERN =
  * 供空仓 consumer 和 gate 使用的机器可读声明。运行时判定仍由
  * parseAgentOsV1Contract 的严格解析完成，避免不同 JSON Schema validator 的宽松差异。
  */
-export const AGENT_OS_V1_CONTRACT_SCHEMA = Object.freeze({
+export const AGENT_OS_V1_CONTRACT_SCHEMA = deepFreeze({
   $schema: "https://json-schema.org/draft/2020-12/schema",
   $id: "https://morpheus.dev/schemas/agent-os/v1/contract.json",
   type: "object",
@@ -343,7 +343,16 @@ export function parseAgentOsV1Contract(input: unknown): CanonicalAgentOsV1Contra
 
 /** 将已验证合约转换为稳定的、按键排序的 JSON 源数据。 */
 export function canonicalAgentOsV1Source(contract: AgentOsV1Contract): string {
-  return canonicalJson(contract);
+  return canonicalJson({
+    schemaVersion: contract.schemaVersion,
+    features: contract.features,
+    agentDefinition: contract.agentDefinition,
+    hostProfile: contract.hostProfile,
+    agentDeployment: contract.agentDeployment,
+    executionInstance: contract.executionInstance,
+    runSpec: contract.runSpec,
+    executionGrant: contract.executionGrant,
+  });
 }
 
 /** 生成 capability package descriptor 的内容地址，不接受调用方自报的 digest。 */

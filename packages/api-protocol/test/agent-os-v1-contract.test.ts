@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import {
   AGENT_OS_V1_CONTRACT_SCHEMA,
   AgentOsV1ContractError,
+  canonicalAgentOsV1Source,
   createCapabilityPackageDescriptorDigest,
   parseAgentOsV1Contract,
 } from "../src/agent-os-v1-contract.js";
@@ -132,6 +133,13 @@ describe("Greenfield Agent OS v1 contract", () => {
     expect(AGENT_OS_V1_CONTRACT_SCHEMA.additionalProperties).toBe(false);
     expect(AGENT_OS_V1_CONTRACT_SCHEMA.$defs.capabilityPackage.additionalProperties).toBe(false);
     expect(AGENT_OS_V1_CONTRACT_SCHEMA.$defs.executionGrant.required).toContain("scope");
+    expect(Object.isFrozen(AGENT_OS_V1_CONTRACT_SCHEMA)).toBe(true);
+    expect(Object.isFrozen(AGENT_OS_V1_CONTRACT_SCHEMA.$defs)).toBe(true);
+    expect(Object.isFrozen(AGENT_OS_V1_CONTRACT_SCHEMA.$defs.executionGrant)).toBe(true);
+    expect(Object.isFrozen(AGENT_OS_V1_CONTRACT_SCHEMA.$defs.executionGrant.required)).toBe(true);
+    expect(
+      Object.isFrozen(AGENT_OS_V1_CONTRACT_SCHEMA.$defs.executionGrant.properties.kind.enum)
+    ).toBe(true);
     const definition: AgentOsV1.AgentDefinition = fixture().agentDefinition;
     expect(definition.agentId).toBe("agent.demo");
     expect(AgentOsV1.parseAgentOsV1Contract).toBe(parseAgentOsV1Contract);
@@ -158,6 +166,7 @@ describe("Greenfield Agent OS v1 contract", () => {
     expect(Object.isFrozen(parsed.agentDefinition.capabilityPackage.environment)).toBe(true);
     expect(Object.isFrozen(parsed.executionGrant.scope)).toBe(true);
     expect(parsed.canonicalSource).toBe(parseAgentOsV1Contract(fixture()).canonicalSource);
+    expect(canonicalAgentOsV1Source(parsed)).toBe(parsed.canonicalSource);
   });
 
   test("matches an independent standard SHA-256 implementation for descriptor pins", () => {
