@@ -246,6 +246,20 @@ describe("Greenfield Agent OS v1 contract", () => {
     const audience = copy(fixture());
     (audience.executionGrant as Record<string, unknown>).audience = ["host.demo", "host.other"];
     expectReject(audience);
+    const delegatedScope = copy(fixture());
+    (delegatedScope.executionGrant as Record<string, unknown>).kind = "delegated";
+    (delegatedScope.executionGrant as Record<string, unknown>).scope = [
+      "workspace.read",
+      "workspace.write",
+    ];
+    expectReject(delegatedScope);
+    const delegatedAudience = copy(fixture());
+    (delegatedAudience.executionGrant as Record<string, unknown>).kind = "delegated";
+    (delegatedAudience.executionGrant as Record<string, unknown>).audience = [
+      "host.demo",
+      "host.other",
+    ];
+    expectReject(delegatedAudience);
     const personal = copy(fixture("personal", "enrolled"));
     (personal.executionGrant as Record<string, unknown>).scope = ["workspace.write"];
     (personal.runSpec as Record<string, unknown>).capabilityScopes = ["workspace.write"];
