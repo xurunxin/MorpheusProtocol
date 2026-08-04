@@ -704,9 +704,13 @@ function exact(value: Record<string, unknown>, expected: readonly string[], labe
 
 function strings(value: unknown, label: string, pattern: RegExp): readonly string[] {
   const values = arrayValues(value, label);
-  if (values.some((entry) => typeof entry !== "string" || !pattern.test(entry)))
-    fail("INVALID_VALUE", `${label} contains an invalid value`);
-  const normalized = [...values].sort();
+  const normalized: string[] = [];
+  for (const entry of values) {
+    if (typeof entry !== "string" || !pattern.test(entry))
+      fail("INVALID_VALUE", `${label} contains an invalid value`);
+    normalized.push(entry);
+  }
+  normalized.sort();
   if (normalized.length === 0 || new Set(normalized).size !== normalized.length)
     fail("INVALID_VALUE", `${label} must be a non-empty unique array`);
   return normalized;
