@@ -9,7 +9,11 @@ import {
   createCapabilityPackageDescriptorDigest,
   parseAgentOsV1Contract,
 } from "../src/agent-os-v1-contract.js";
-import type { AgentOsV1Contract, CapabilityPackageDescriptor } from "../src/agent-os-v1-types.js";
+import type {
+  AgentOsV1Contract,
+  CapabilityPackageDescriptor,
+  DigestRef,
+} from "../src/agent-os-v1-types.js";
 import {
   AGENT_OS_V1_SUPPORTED_FEATURES,
   AgentOsV1,
@@ -43,7 +47,7 @@ function digest(seed: string): string {
   return `sha256:${createHash("sha256").update(seed).digest("hex")}`;
 }
 
-function digestRef(ref: string) {
+function digestRef(ref: DigestRef["ref"]): DigestRef {
   return { ref, digest: digest(ref) };
 }
 
@@ -63,7 +67,7 @@ function fixture(
     requestedScopes: ["workspace.read"],
     skills: [{ id: "skill.demo", packageDigest: packageDescriptor.digest }],
     tools: [{ id: "tool.demo", packageDigest: packageDescriptor.digest }],
-    securityPolicy: digestRef("security-policy.demo"),
+    securityPolicy: digestRef("policy:baseline"),
   } satisfies AgentOsV1Contract["agentDefinition"];
   const definitionDigest = createAgentDefinitionDigest(agentDefinition);
   const sessionGrant = {
@@ -79,8 +83,8 @@ function fixture(
       : {
           kind: "remote" as const,
           leaseId: "lease.demo",
-          epoch: 1,
-          generation: 1,
+          epoch: "lease-epoch:current" as const,
+          instanceGeneration: 1,
           scope: ["workspace.read"],
           notBefore: "2026-08-05T00:00:00.000Z",
           expiresAt: "2026-08-05T00:10:00.000Z",
@@ -97,11 +101,11 @@ function fixture(
       authorityDomain: "authority.demo",
       capabilityCeiling: ["workspace.read"],
       supportedFeatures: ["capability-packages", "delegation-grants"],
-      providerCeiling: digestRef("provider-ceiling.demo"),
-      workspaceCeiling: digestRef("workspace-ceiling.demo"),
-      storageCeiling: digestRef("storage-ceiling.demo"),
-      networkCeiling: digestRef("network-ceiling.demo"),
-      lifecycleCeiling: digestRef("lifecycle-ceiling.demo"),
+      providerCeiling: digestRef("ceiling:provider"),
+      workspaceCeiling: digestRef("ceiling:workspace"),
+      storageCeiling: digestRef("ceiling:storage"),
+      networkCeiling: digestRef("ceiling:network"),
+      lifecycleCeiling: digestRef("ceiling:lifecycle"),
     },
     agentDeployment: {
       deploymentId: "deployment.demo",
@@ -113,7 +117,7 @@ function fixture(
       desiredState: "active",
       revision: "revision.demo",
       desiredReplicas: 1,
-      placementPolicy: digestRef("placement-policy.demo"),
+      placementPolicy: digestRef("placement:default"),
       bindings: [],
     },
     executionInstance: {
@@ -151,8 +155,8 @@ function fixture(
       policyDigest: agentDefinition.securityPolicy.digest,
       capabilityDigest: packageDescriptor.digest,
       keyId: "grant-key.demo",
-      rotationGeneration: 1,
-      revocationGeneration: packageDescriptor.revocation.generation,
+      rotationGeneration: "rotation:key-current",
+      revocationGeneration: "revocation:key-current",
       scope: ["workspace.read"],
       notBefore: "2026-08-05T00:00:00.000Z",
       expiresAt: "2026-08-05T00:05:00.000Z",
@@ -213,6 +217,21 @@ describe("Greenfield Agent OS v1 contract", () => {
       ])
     );
     expect(AGENT_OS_V1_CONTRACT_SCHEMA.$defs.leaseBinding.oneOf).toHaveLength(2);
+    expect(AGENT_OS_V1_CONTRACT_SCHEMA.$defs.digestRef.properties.ref.$ref).toBe(
+      "#/$defs/opaqueRef"
+    );
+    expect(
+      AGENT_OS_V1_CONTRACT_SCHEMA.$defs.executionGrant.properties.rotationGeneration.$ref
+    ).toBe("#/$defs/rotationGenerationRef");
+    expect(
+      AGENT_OS_V1_CONTRACT_SCHEMA.$defs.executionGrant.properties.revocationGeneration.$ref
+    ).toBe("#/$defs/revocationGenerationRef");
+    expect(AGENT_OS_V1_CONTRACT_SCHEMA.$defs.remoteLeaseBinding.properties.epoch.$ref).toBe(
+      "#/$defs/leaseEpochRef"
+    );
+    expect(
+      AGENT_OS_V1_CONTRACT_SCHEMA.$defs.remoteLeaseBinding.properties.instanceGeneration.type
+    ).toBe("integer");
     expect(AGENT_OS_V1_CONTRACT_SCHEMA.$defs.executionGrant.required).toContain("scope");
     expect(AGENT_OS_V1_CONTRACT_SCHEMA.$defs.executionGrant.required).toEqual(
       expect.arrayContaining(["sessionGrant", "leaseBinding", "attemptId", "instanceId"])
@@ -261,6 +280,48 @@ describe("Greenfield Agent OS v1 contract", () => {
     const oldNarrowPayload = copy(fixture());
     delete (oldNarrowPayload.agentDefinition as Record<string, unknown>).identity;
     expectReject(oldNarrowPayload);
+  });
+
+  test("normalizes definition collections before deriving a digest", () => {
+    const unordered = copy(fixture());
+    const definition = unordered.agentDefinition as Record<string, unknown>;
+    const packageDigest = fixture().agentDefinition.capabilityPackage.digest;
+    definition.requestedScopes = ["workspace.write", "workspace.read"];
+    definition.skills = [
+      { id: "skill.z", packageDigest },
+      { id: "skill.a", packageDigest },
+    ];
+    definition.tools = [
+      { id: "tool.z", packageDigest },
+      { id: "tool.a", packageDigest },
+    ];
+
+    const normalized = copy(unordered);
+    const normalizedDefinition = normalized.agentDefinition as Record<string, unknown>;
+    normalizedDefinition.requestedScopes = ["workspace.read", "workspace.write"];
+    normalizedDefinition.skills = [
+      { id: "skill.a", packageDigest },
+      { id: "skill.z", packageDigest },
+    ];
+    normalizedDefinition.tools = [
+      { id: "tool.a", packageDigest },
+      { id: "tool.z", packageDigest },
+    ];
+
+    const helperDigest = createAgentDefinitionDigest(
+      definition as AgentOsV1Contract["agentDefinition"]
+    );
+    expect(helperDigest).toBe(
+      createAgentDefinitionDigest(normalizedDefinition as AgentOsV1Contract["agentDefinition"])
+    );
+    (unordered.runSpec as Record<string, unknown>).definitionDigest = helperDigest;
+    (unordered.executionGrant as Record<string, unknown>).definitionDigest = helperDigest;
+
+    const parsed = parseAgentOsV1Contract(unordered);
+    expect(parsed.runSpec.definitionDigest).toBe(helperDigest);
+    expect(parsed.agentDefinition.requestedScopes).toEqual(["workspace.read", "workspace.write"]);
+    expect(parsed.agentDefinition.skills.map(({ id }) => id)).toEqual(["skill.a", "skill.z"]);
+    expect(parsed.agentDefinition.tools.map(({ id }) => id)).toEqual(["tool.a", "tool.z"]);
   });
 
   test("returns canonical deeply immutable source data", () => {
@@ -351,37 +412,90 @@ describe("Greenfield Agent OS v1 contract", () => {
     expectReject(forged);
   });
 
-  test("rejects duplicate capability or binding requirements and raw path references", () => {
+  test("rejects duplicate capability or binding requirements and local path refs", () => {
     const duplicateSkill = copy(fixture());
     const skills = (duplicateSkill.agentDefinition as Record<string, unknown>).skills as Record<
       string,
       unknown
     >[];
     skills.push({ ...skills[0]! });
-    rebindDefinitionDigest(duplicateSkill);
     expectReject(duplicateSkill);
 
     const duplicateBinding = copy(fixture());
     (duplicateBinding.agentDeployment as Record<string, unknown>).bindings = [
       {
         bindingId: "binding.demo",
-        ref: "binding-ref.demo",
+        ref: "binding:demo",
         digest: digest("binding.demo"),
       },
       {
         bindingId: "binding.demo",
-        ref: "binding-ref.other",
+        ref: "binding:other",
         digest: digest("binding.other"),
       },
     ];
     expectReject(duplicateBinding);
 
-    const rawWorkspacePath = copy(fixture());
-    (rawWorkspacePath.hostProfile as Record<string, unknown>).workspaceCeiling = {
-      ref: "/workspace/demo",
-      digest: digest("workspace-path"),
-    };
-    expectReject(rawWorkspacePath);
+    for (const ref of ["workspace/demo", "home/user/repo", "workspace\\demo", "/workspace/demo"]) {
+      const localPath = copy(fixture());
+      (localPath.hostProfile as Record<string, unknown>).workspaceCeiling = {
+        ref,
+        digest: digest("workspace-path"),
+      };
+      expectReject(localPath);
+    }
+
+    const bindingPath = copy(fixture());
+    (bindingPath.agentDeployment as Record<string, unknown>).bindings = [
+      { bindingId: "binding.demo", ref: "home/user/repo", digest: digest("binding-path") },
+    ];
+    expectReject(bindingPath);
+  });
+
+  test("rejects swapped, missing or malformed opaque key generation refs", () => {
+    const swappedRotation = copy(fixture());
+    (swappedRotation.executionGrant as Record<string, unknown>).rotationGeneration =
+      "revocation:key-current";
+    expectReject(swappedRotation);
+
+    const swappedRevocation = copy(fixture());
+    (swappedRevocation.executionGrant as Record<string, unknown>).revocationGeneration =
+      "rotation:key-current";
+    expectReject(swappedRevocation);
+
+    const missingRotation = copy(fixture());
+    delete (missingRotation.executionGrant as Record<string, unknown>).rotationGeneration;
+    expectReject(missingRotation);
+
+    const malformedRevocation = copy(fixture());
+    (malformedRevocation.executionGrant as Record<string, unknown>).revocationGeneration = 1;
+    expectReject(malformedRevocation);
+  });
+
+  test("keeps lease epoch, instance generation and key generation domains distinct", () => {
+    const parsed = parseAgentOsV1Contract(fixture());
+    if (parsed.executionGrant.leaseBinding.kind !== "remote")
+      throw new Error("worker fixture must bind a remote lease");
+    expect(parsed.executionGrant.leaseBinding.epoch).toBe("lease-epoch:current");
+    expect(parsed.executionGrant.leaseBinding.instanceGeneration).toBe(
+      parsed.executionInstance.generation
+    );
+    expect(parsed.executionGrant.leaseBinding.epoch.startsWith("lease-epoch:")).toBe(true);
+    expect(parsed.executionGrant.rotationGeneration.startsWith("rotation:")).toBe(true);
+
+    const swappedLeaseEpoch = copy(fixture());
+    (
+      (swappedLeaseEpoch.executionGrant as Record<string, unknown>).leaseBinding as Record<
+        string,
+        unknown
+      >
+    ).epoch = "rotation:key-current";
+    expectReject(swappedLeaseEpoch);
+
+    const interchangedKeyDomain = copy(fixture());
+    (interchangedKeyDomain.executionGrant as Record<string, unknown>).rotationGeneration =
+      "lease-epoch:current";
+    expectReject(interchangedKeyDomain);
   });
 
   test("fails closed when grant tuple, scope, time, generation or lease binding drifts", () => {
@@ -410,7 +524,7 @@ describe("Greenfield Agent OS v1 contract", () => {
     const generation = copy(fixture());
     (
       (generation.executionGrant as Record<string, unknown>).leaseBinding as Record<string, unknown>
-    ).generation = 2;
+    ).instanceGeneration = 2;
     expectReject(generation);
 
     const remoteWithoutLease = copy(fixture());
@@ -423,8 +537,8 @@ describe("Greenfield Agent OS v1 contract", () => {
     (localWithRemoteLease.executionGrant as Record<string, unknown>).leaseBinding = {
       kind: "remote",
       leaseId: "lease.demo",
-      epoch: 1,
-      generation: 1,
+      epoch: "lease-epoch:current",
+      instanceGeneration: 1,
       scope: ["workspace.read"],
       notBefore: "2026-08-05T00:00:00.000Z",
       expiresAt: "2026-08-05T00:10:00.000Z",

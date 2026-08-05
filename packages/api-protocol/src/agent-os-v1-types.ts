@@ -12,6 +12,10 @@ export type PackageTransportKind = "mcp" | "skill" | "plugin" | "provider-adapte
 export type NetworkConstraint = "none" | "egress-restricted";
 export type DeploymentDesiredState = "active" | "suspended";
 export type ExecutionObservedState = "pending" | "running" | "stopped" | "failed";
+export type OpaqueRef = `${string}:${string}`;
+export type LeaseEpochRef = `lease-epoch:${string}`;
+export type RotationGenerationRef = `rotation:${string}`;
+export type RevocationGenerationRef = `revocation:${string}`;
 
 export interface EnvironmentConstraints {
   readonly operatingSystems: readonly string[];
@@ -21,7 +25,7 @@ export interface EnvironmentConstraints {
 
 /** 不可解引用的内容地址引用；公开 v1 不携带本地路径、token 或 credential。 */
 export interface DigestRef {
-  readonly ref: string;
+  readonly ref: OpaqueRef;
   readonly digest: string;
 }
 
@@ -55,8 +59,8 @@ export interface NotApplicableLeaseBinding {
 export interface RemoteLeaseBinding {
   readonly kind: "remote";
   readonly leaseId: string;
-  readonly epoch: number;
-  readonly generation: number;
+  readonly epoch: LeaseEpochRef;
+  readonly instanceGeneration: number;
   readonly scope: readonly string[];
   readonly notBefore: string;
   readonly expiresAt: string;
@@ -173,8 +177,8 @@ export interface ExecutionGrant {
   readonly policyDigest: string;
   readonly capabilityDigest: string;
   readonly keyId: string;
-  readonly rotationGeneration: number;
-  readonly revocationGeneration: number;
+  readonly rotationGeneration: RotationGenerationRef;
+  readonly revocationGeneration: RevocationGenerationRef;
   readonly scope: readonly string[];
   readonly notBefore: string;
   readonly expiresAt: string;

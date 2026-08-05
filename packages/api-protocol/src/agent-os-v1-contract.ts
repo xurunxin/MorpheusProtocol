@@ -12,7 +12,11 @@ import type {
   ExecutionInstance,
   ExecutionObservedState,
   HostProfile,
+  LeaseEpochRef,
   LeaseBinding,
+  OpaqueRef,
+  RevocationGenerationRef,
+  RotationGenerationRef,
   RunSpec,
   SessionGrant,
 } from "./agent-os-v1-types.js";
@@ -31,7 +35,11 @@ export type {
   ExecutionInstance,
   ExecutionObservedState,
   HostProfile,
+  LeaseEpochRef,
   LeaseBinding,
+  OpaqueRef,
+  RevocationGenerationRef,
+  RotationGenerationRef,
   RunSpec,
   SessionGrant,
 } from "./agent-os-v1-types.js";
@@ -45,6 +53,10 @@ const SUPPORTED_FEATURES = new Set<string>(AGENT_OS_V1_SUPPORTED_FEATURES);
 const DIGEST_PATTERN = /^sha256:[0-9a-f]{64}$/u;
 const SECRET_REF_PATTERN = /^secret-ref:[a-z0-9][a-z0-9._/-]{0,127}$/u;
 const IDENTIFIER_PATTERN = /^[a-z][a-z0-9._/-]{0,127}$/u;
+const OPAQUE_REF_PATTERN = /^[a-z][a-z0-9._-]{0,63}:[a-z][a-z0-9._-]{0,127}$/u;
+const LEASE_EPOCH_REF_PATTERN = /^lease-epoch:[a-z][a-z0-9._-]{0,127}$/u;
+const ROTATION_GENERATION_REF_PATTERN = /^rotation:[a-z][a-z0-9._-]{0,127}$/u;
+const REVOCATION_GENERATION_REF_PATTERN = /^revocation:[a-z][a-z0-9._-]{0,127}$/u;
 const RFC3339_MILLIS_PATTERN =
   /^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}Z$/u;
 
@@ -81,12 +93,25 @@ export const AGENT_OS_V1_CONTRACT_SCHEMA = deepFreeze({
     identifier: { type: "string", pattern: "^[a-z][a-z0-9._/-]{0,127}$" },
     version: { type: "string", pattern: "^1\\.[0-9]+$" },
     digest: { type: "string", pattern: "^sha256:[0-9a-f]{64}$" },
+    opaqueRef: { type: "string", pattern: "^[a-z][a-z0-9._-]{0,63}:[a-z][a-z0-9._-]{0,127}$" },
+    leaseEpochRef: {
+      type: "string",
+      pattern: "^lease-epoch:[a-z][a-z0-9._-]{0,127}$",
+    },
+    rotationGenerationRef: {
+      type: "string",
+      pattern: "^rotation:[a-z][a-z0-9._-]{0,127}$",
+    },
+    revocationGenerationRef: {
+      type: "string",
+      pattern: "^revocation:[a-z][a-z0-9._-]{0,127}$",
+    },
     digestRef: {
       type: "object",
       additionalProperties: false,
       required: ["ref", "digest"],
       properties: {
-        ref: { $ref: "#/$defs/identifier" },
+        ref: { $ref: "#/$defs/opaqueRef" },
         digest: { $ref: "#/$defs/digest" },
       },
     },
@@ -110,7 +135,7 @@ export const AGENT_OS_V1_CONTRACT_SCHEMA = deepFreeze({
       required: ["bindingId", "ref", "digest"],
       properties: {
         bindingId: { $ref: "#/$defs/identifier" },
-        ref: { $ref: "#/$defs/identifier" },
+        ref: { $ref: "#/$defs/opaqueRef" },
         digest: { $ref: "#/$defs/digest" },
       },
     },
@@ -168,12 +193,20 @@ export const AGENT_OS_V1_CONTRACT_SCHEMA = deepFreeze({
     remoteLeaseBinding: {
       type: "object",
       additionalProperties: false,
-      required: ["kind", "leaseId", "epoch", "generation", "scope", "notBefore", "expiresAt"],
+      required: [
+        "kind",
+        "leaseId",
+        "epoch",
+        "instanceGeneration",
+        "scope",
+        "notBefore",
+        "expiresAt",
+      ],
       properties: {
         kind: { const: "remote" },
         leaseId: { $ref: "#/$defs/identifier" },
-        epoch: { type: "integer", minimum: 0, maximum: 9007199254740991 },
-        generation: { type: "integer", minimum: 0, maximum: 9007199254740991 },
+        epoch: { $ref: "#/$defs/leaseEpochRef" },
+        instanceGeneration: { type: "integer", minimum: 0, maximum: 9007199254740991 },
         scope: { $ref: "#/$defs/identifiers" },
         notBefore: { $ref: "#/$defs/instant" },
         expiresAt: { $ref: "#/$defs/instant" },
@@ -444,8 +477,8 @@ export const AGENT_OS_V1_CONTRACT_SCHEMA = deepFreeze({
         policyDigest: { $ref: "#/$defs/digest" },
         capabilityDigest: { $ref: "#/$defs/digest" },
         keyId: { $ref: "#/$defs/identifier" },
-        rotationGeneration: { type: "integer", minimum: 0, maximum: 9007199254740991 },
-        revocationGeneration: { type: "integer", minimum: 0, maximum: 9007199254740991 },
+        rotationGeneration: { $ref: "#/$defs/rotationGenerationRef" },
+        revocationGeneration: { $ref: "#/$defs/revocationGenerationRef" },
         scope: { $ref: "#/$defs/identifiers" },
         notBefore: { $ref: "#/$defs/instant" },
         expiresAt: { $ref: "#/$defs/instant" },
@@ -549,7 +582,7 @@ export function createCapabilityPackageDescriptorDigest(
 
 /** 生成 AgentDefinition 的内容地址；RunSpec 必须固定此精确 public definition。 */
 export function createAgentDefinitionDigest(definition: AgentDefinition): string {
-  return `sha256:${sha256Hex(canonicalJson(definition))}`;
+  return `sha256:${sha256Hex(canonicalJson(agentDefinitionOf(definition)))}`;
 }
 
 function agentDefinitionOf(value: unknown): AgentDefinition {
@@ -589,7 +622,7 @@ function digestRefOf(value: unknown, label: string): DigestRef {
   const input = record(value, label);
   exact(input, ["ref", "digest"], label);
   return {
-    ref: identifier(input.ref, `${label}.ref`),
+    ref: opaqueRef(input.ref, `${label}.ref`),
     digest: digest(input.digest, `${label}.digest`),
   };
 }
@@ -619,7 +652,7 @@ function deploymentBindings(value: unknown, label: string): readonly DeploymentB
     exact(input, ["bindingId", "ref", "digest"], itemLabel);
     bindings.push({
       bindingId: identifier(input.bindingId, `${itemLabel}.bindingId`),
-      ref: identifier(input.ref, `${itemLabel}.ref`),
+      ref: opaqueRef(input.ref, `${itemLabel}.ref`),
       digest: digest(input.digest, `${itemLabel}.digest`),
     });
   }
@@ -932,11 +965,11 @@ function executionGrantOf(value: unknown): ExecutionGrant {
     policyDigest: digest(input.policyDigest, "executionGrant.policyDigest"),
     capabilityDigest: digest(input.capabilityDigest, "executionGrant.capabilityDigest"),
     keyId: identifier(input.keyId, "executionGrant.keyId"),
-    rotationGeneration: nonNegativeInteger(
+    rotationGeneration: rotationGenerationRef(
       input.rotationGeneration,
       "executionGrant.rotationGeneration"
     ),
-    revocationGeneration: nonNegativeInteger(
+    revocationGeneration: revocationGenerationRef(
       input.revocationGeneration,
       "executionGrant.revocationGeneration"
     ),
@@ -977,7 +1010,7 @@ function leaseBindingOf(value: unknown): LeaseBinding {
   if (input.kind !== "remote") fail("INVALID_VALUE", "executionGrant.leaseBinding.kind is invalid");
   exact(
     input,
-    ["kind", "leaseId", "epoch", "generation", "scope", "notBefore", "expiresAt"],
+    ["kind", "leaseId", "epoch", "instanceGeneration", "scope", "notBefore", "expiresAt"],
     "executionGrant.leaseBinding"
   );
   const notBefore = instant(input.notBefore, "executionGrant.leaseBinding.notBefore");
@@ -987,8 +1020,11 @@ function leaseBindingOf(value: unknown): LeaseBinding {
   return {
     kind: "remote",
     leaseId: identifier(input.leaseId, "executionGrant.leaseBinding.leaseId"),
-    epoch: nonNegativeInteger(input.epoch, "executionGrant.leaseBinding.epoch"),
-    generation: nonNegativeInteger(input.generation, "executionGrant.leaseBinding.generation"),
+    epoch: leaseEpochRef(input.epoch, "executionGrant.leaseBinding.epoch"),
+    instanceGeneration: nonNegativeInteger(
+      input.instanceGeneration,
+      "executionGrant.leaseBinding.instanceGeneration"
+    ),
     scope: scopes(input.scope, "executionGrant.leaseBinding.scope"),
     notBefore,
     expiresAt,
@@ -1048,10 +1084,6 @@ function validateRelationships(value: Omit<AgentOsV1Contract, "schemaVersion">):
     executionGrant.capabilityDigest !== runSpec.capabilityDigest
   )
     fail("DRIFT_DETECTED", "grant digest pins drifted");
-  if (
-    executionGrant.revocationGeneration !== agentDefinition.capabilityPackage.revocation.generation
-  )
-    fail("DRIFT_DETECTED", "grant revocation generation drifted");
   if (agentDeployment.target !== hostProfile.role)
     fail("INVALID_VALUE", "deployment target must equal host role");
   if (hostProfile.hostKind === "worker") {
@@ -1077,7 +1109,7 @@ function validateRelationships(value: Omit<AgentOsV1Contract, "schemaVersion">):
   } else {
     if (executionGrant.leaseBinding.kind !== "remote")
       fail("INVALID_VALUE", "remote and delegated grants require a remote lease binding");
-    if (executionGrant.leaseBinding.generation !== executionInstance.generation)
+    if (executionGrant.leaseBinding.instanceGeneration !== executionInstance.generation)
       fail("DRIFT_DETECTED", "lease binding generation must pin the execution instance");
   }
   if (executionGrant.audience.length !== 1 || executionGrant.audience[0] !== hostProfile.hostId)
@@ -1237,6 +1269,30 @@ function identifier(value: unknown, label: string): string {
   if (typeof value !== "string" || !IDENTIFIER_PATTERN.test(value))
     fail("INVALID_VALUE", `${label} is invalid`);
   return value;
+}
+
+function opaqueRef(value: unknown, label: string): OpaqueRef {
+  if (typeof value !== "string" || !OPAQUE_REF_PATTERN.test(value))
+    fail("INVALID_VALUE", `${label} must be a namespace-qualified opaque ref`);
+  return value as OpaqueRef;
+}
+
+function leaseEpochRef(value: unknown, label: string): LeaseEpochRef {
+  if (typeof value !== "string" || !LEASE_EPOCH_REF_PATTERN.test(value))
+    fail("INVALID_VALUE", `${label} must be a lease epoch opaque ref`);
+  return value as LeaseEpochRef;
+}
+
+function rotationGenerationRef(value: unknown, label: string): RotationGenerationRef {
+  if (typeof value !== "string" || !ROTATION_GENERATION_REF_PATTERN.test(value))
+    fail("INVALID_VALUE", `${label} must be a rotation opaque ref`);
+  return value as RotationGenerationRef;
+}
+
+function revocationGenerationRef(value: unknown, label: string): RevocationGenerationRef {
+  if (typeof value !== "string" || !REVOCATION_GENERATION_REF_PATTERN.test(value))
+    fail("INVALID_VALUE", `${label} must be a revocation opaque ref`);
+  return value as RevocationGenerationRef;
 }
 
 function version(value: unknown, label: string): string {
