@@ -2,6 +2,23 @@ import type {
   AgentDefinition,
   AgentDeployment,
   AgentOsV1Contract,
+  AgentOsV1ActiveRunPin,
+  AgentOsV1AuthorityRequestEnvelope,
+  AgentOsV1HandlerCatalogEntry,
+  AgentOsV1HandlerCatalogSnapshot,
+  AgentOsV1HandlerTransitionCommand,
+  AgentOsV1HandshakeOffer,
+  AgentOsV1HandshakePeer,
+  AgentOsV1NegotiatedSnapshot,
+  AgentOsV1PeerRole,
+  AgentOsV1PersonalTransitionCommand,
+  AgentOsV1PersonalStateClassification,
+  AgentOsV1PersonalStateProbe,
+  AgentOsV1ProtocolFamily,
+  AgentOsV1ProtocolOffer,
+  AgentOsV1ProtocolVersion,
+  AgentOsV1ReferenceRequest,
+  AgentOsV1ReferenceResponse,
   CapabilityRequirement,
   CapabilityPackageDescriptor,
   CanonicalAgentOsV1Contract,
@@ -12,19 +29,41 @@ import type {
   ExecutionInstance,
   ExecutionObservedState,
   HostProfile,
+  HostKind,
   LeaseEpochRef,
   LeaseBinding,
+  ManagementMode,
   OpaqueRef,
   RevocationGenerationRef,
   RotationGenerationRef,
   RunSpec,
   SessionGrant,
+  PersonalHostState,
 } from "./agent-os-v1-types.js";
 
 export type {
   AgentDefinition,
   AgentDeployment,
   AgentOsV1Contract,
+  AgentOsV1ActiveRunPin,
+  AgentOsV1AuthorityRequestEnvelope,
+  AgentOsV1HandlerCatalogEntry,
+  AgentOsV1HandlerCatalogSnapshot,
+  AgentOsV1HandlerTransitionCommand,
+  AgentOsV1HandshakeOffer,
+  AgentOsV1HandshakePeer,
+  AgentOsV1NegotiatedSnapshot,
+  AgentOsV1PeerRole,
+  AgentOsV1PersonalTransitionCommand,
+  AgentOsV1PersonalStateClassification,
+  AgentOsV1PersonalStateProbe,
+  AgentOsV1ProtocolFamily,
+  AgentOsV1ProtocolOffer,
+  AgentOsV1ProtocolVersion,
+  AgentOsV1ReferenceRequest,
+  AgentOsV1ReferenceResponse,
+  AgentOsV1RejectionReason,
+  AgentOsV1UpdateReason,
   CapabilityRequirement,
   CapabilityPackageDescriptor,
   CanonicalAgentOsV1Contract,
@@ -35,13 +74,17 @@ export type {
   ExecutionInstance,
   ExecutionObservedState,
   HostProfile,
+  HostKind,
   LeaseEpochRef,
   LeaseBinding,
+  ManagementMode,
   OpaqueRef,
   RevocationGenerationRef,
   RotationGenerationRef,
   RunSpec,
   SessionGrant,
+  PersonalHostState,
+  PersonalStateClassification,
 } from "./agent-os-v1-types.js";
 
 export const AGENT_OS_V1_SUPPORTED_FEATURES = Object.freeze([
@@ -59,6 +102,21 @@ const ROTATION_GENERATION_REF_PATTERN = /^rotation:[a-z][a-z0-9._-]{0,127}$/u;
 const REVOCATION_GENERATION_REF_PATTERN = /^revocation:[a-z][a-z0-9._-]{0,127}$/u;
 const RFC3339_MILLIS_PATTERN =
   /^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}Z$/u;
+const PROTOCOL_VERSION_PATTERN = /^(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)$/u;
+
+export const AGENT_OS_V1_PROTOCOL_FAMILIES = Object.freeze([
+  "execution.v1",
+  "deployment.v1",
+  "control.v1",
+  "personal-local.v1",
+] as const);
+
+export const AGENT_OS_V1_PROTOCOL_REGISTRY = deepFreeze({
+  "execution.v1": ["1.0", "1.1"],
+  "deployment.v1": ["1.0", "1.1"],
+  "control.v1": ["1.0", "1.1"],
+  "personal-local.v1": ["1.0", "1.1"],
+} satisfies Readonly<Record<AgentOsV1ProtocolFamily, readonly AgentOsV1ProtocolVersion[]>>);
 
 /**
  * 供空仓 consumer 和 gate 使用的机器可读声明。运行时判定仍由
@@ -554,6 +612,318 @@ export function parseAgentOsV1Contract(input: unknown): CanonicalAgentOsV1Contra
   } satisfies AgentOsV1Contract;
   const canonicalSource = canonicalAgentOsV1Source(canonical);
   return deepFreeze({ ...canonical, canonicalSource });
+}
+
+/** 严格解析一个协议 offer；版本是否已注册由 negotiation registry 决定。 */
+export function parseAgentOsV1ProtocolOffer(input: unknown): AgentOsV1ProtocolOffer {
+  const value = record(input, "protocol offer");
+  exact(
+    value,
+    ["protocolId", "versions", "features", "requiredFeatures", "schemaVersion", "handlerVersion"],
+    "protocol offer"
+  );
+  if (value.schemaVersion !== "agent-os/v1")
+    fail("UNSUPPORTED_VERSION", "protocol offer schemaVersion must equal agent-os/v1");
+  const features = strings(value.features, "protocol offer features", IDENTIFIER_PATTERN);
+  const requiredFeatures = stringsAllowEmpty(
+    value.requiredFeatures,
+    "protocol offer requiredFeatures",
+    IDENTIFIER_PATTERN
+  );
+  if (requiredFeatures.some((feature) => !features.includes(feature)))
+    fail("INVALID_VALUE", "protocol offer requiredFeatures must be included in features");
+  return deepFreeze({
+    protocolId: protocolFamily(value.protocolId, "protocol offer protocolId"),
+    versions: protocolVersions(value.versions, "protocol offer versions"),
+    features,
+    requiredFeatures,
+    schemaVersion: "agent-os/v1",
+    handlerVersion: identifier(value.handlerVersion, "protocol offer handlerVersion"),
+  });
+}
+
+/** 严格解析 peer identity/enrollment；Control 永远不是 HostKind。 */
+export function parseAgentOsV1HandshakePeer(input: unknown): AgentOsV1HandshakePeer {
+  const value = record(input, "handshake peer");
+  exact(
+    value,
+    [
+      "peerId",
+      "role",
+      "hostKind",
+      "managementMode",
+      "tenantId",
+      "workloadId",
+      "authorityDomain",
+      "enrollmentRef",
+      "audience",
+    ],
+    "handshake peer"
+  );
+  const role = peerRole(value.role, "handshake peer role");
+  const hostKind = nullableHostKind(value.hostKind, "handshake peer hostKind");
+  const managementMode = nullableManagementMode(
+    value.managementMode,
+    "handshake peer managementMode"
+  );
+  const enrollmentRef =
+    value.enrollmentRef === null
+      ? null
+      : digestRefOf(value.enrollmentRef, "handshake peer enrollmentRef");
+  if (role === "worker" || role === "personal") {
+    if (hostKind !== role || managementMode === null)
+      fail("INVALID_VALUE", `${role} peer must carry its matching HostKind and managementMode`);
+    if (
+      (managementMode === "enrolled" && enrollmentRef === null) ||
+      (managementMode === "standalone" && enrollmentRef !== null)
+    )
+      fail("INVALID_VALUE", "peer enrollmentRef must match managementMode");
+  } else if (hostKind !== null || managementMode !== null || enrollmentRef !== null) {
+    fail("INVALID_VALUE", `${role} is not a Host and cannot carry HostKind or enrollment state`);
+  }
+  return deepFreeze({
+    peerId: identifier(value.peerId, "handshake peer peerId"),
+    role,
+    hostKind,
+    managementMode,
+    tenantId: identifier(value.tenantId, "handshake peer tenantId"),
+    workloadId: identifier(value.workloadId, "handshake peer workloadId"),
+    authorityDomain: identifier(value.authorityDomain, "handshake peer authorityDomain"),
+    enrollmentRef,
+    audience: scopes(value.audience, "handshake peer audience"),
+  });
+}
+
+export function parseAgentOsV1HandshakeOffer(input: unknown): AgentOsV1HandshakeOffer {
+  const value = record(input, "handshake offer");
+  exact(value, ["protocol", "peer", "issuedAt", "maxClockSkewMs"], "handshake offer");
+  return deepFreeze({
+    protocol: parseAgentOsV1ProtocolOffer(value.protocol),
+    peer: parseAgentOsV1HandshakePeer(value.peer),
+    issuedAt: instant(value.issuedAt, "handshake offer issuedAt"),
+    maxClockSkewMs: nonNegativeInteger(value.maxClockSkewMs, "handshake offer maxClockSkewMs"),
+  });
+}
+
+/** 解析 authority-bearing request；未知字段（包括 trace/baggage/secret/token/path）一律拒绝。 */
+export function parseAgentOsV1AuthorityRequestEnvelope(
+  input: unknown
+): AgentOsV1AuthorityRequestEnvelope {
+  const value = record(input, "authority request envelope");
+  exact(
+    value,
+    ["requestId", "deadline", "expectedRevision", "authorityEnvelopeRef"],
+    "authority request envelope"
+  );
+  return deepFreeze({
+    requestId: identifier(value.requestId, "authority request envelope requestId"),
+    deadline: instant(value.deadline, "authority request envelope deadline"),
+    expectedRevision: nonNegativeInteger(
+      value.expectedRevision,
+      "authority request envelope expectedRevision"
+    ),
+    authorityEnvelopeRef: digestRefOf(
+      value.authorityEnvelopeRef,
+      "authority request envelope authorityEnvelopeRef"
+    ),
+  });
+}
+
+/** owner 提供 catalog snapshot；协议层只复制、校验、排序和冻结。 */
+export function parseAgentOsV1HandlerCatalogSnapshot(
+  input: unknown
+): AgentOsV1HandlerCatalogSnapshot {
+  const value = record(input, "handler catalog snapshot");
+  exact(value, ["revision", "handlers"], "handler catalog snapshot");
+  const handlers = arrayValues(value.handlers, "handler catalog snapshot handlers")
+    .map((entry) => handlerCatalogEntry(entry))
+    .sort((left, right) =>
+      `${left.protocolId}:${left.handlerVersion}`.localeCompare(
+        `${right.protocolId}:${right.handlerVersion}`
+      )
+    );
+  const identities = handlers.map((entry) => `${entry.protocolId}:${entry.handlerVersion}`);
+  if (new Set(identities).size !== identities.length)
+    fail("INVALID_VALUE", "handler catalog snapshot contains duplicate handlers");
+  return deepFreeze({
+    revision: nonNegativeInteger(value.revision, "handler catalog snapshot revision"),
+    handlers,
+  });
+}
+
+export function parseAgentOsV1ActiveRunPin(input: unknown): AgentOsV1ActiveRunPin {
+  const value = record(input, "active run pin");
+  exact(
+    value,
+    [
+      "runId",
+      "protocolId",
+      "selectedVersion",
+      "selectedFeatures",
+      "schemaVersion",
+      "handlerVersion",
+    ],
+    "active run pin"
+  );
+  const snapshot = negotiatedSnapshotOf(
+    {
+      protocolId: value.protocolId,
+      selectedVersion: value.selectedVersion,
+      selectedFeatures: value.selectedFeatures,
+      schemaVersion: value.schemaVersion,
+      handlerVersion: value.handlerVersion,
+    },
+    "active run pin"
+  );
+  return deepFreeze({
+    runId: identifier(value.runId, "active run pin runId"),
+    ...snapshot,
+  });
+}
+
+export function parseAgentOsV1NegotiatedSnapshot(input: unknown): AgentOsV1NegotiatedSnapshot {
+  return negotiatedSnapshotOf(input, "negotiated snapshot");
+}
+
+export function parseAgentOsV1ActiveRunPins(input: unknown): readonly AgentOsV1ActiveRunPin[] {
+  const pins = arrayValues(input, "active run pins").map((entry) =>
+    parseAgentOsV1ActiveRunPin(entry)
+  );
+  const runIds = pins.map((pin) => pin.runId);
+  if (new Set(runIds).size !== runIds.length)
+    fail("INVALID_VALUE", "active run pins contain duplicate runId values");
+  return deepFreeze(pins);
+}
+
+export function parseAgentOsV1HandlerTransitionCommand(
+  input: unknown
+): AgentOsV1HandlerTransitionCommand {
+  const value = record(input, "handler transition command");
+  exact(value, ["action", "protocolId", "handlerVersion"], "handler transition command");
+  if (value.action !== "drain" && value.action !== "unload")
+    fail("INVALID_VALUE", "handler transition command action is invalid");
+  return deepFreeze({
+    action: value.action,
+    protocolId: protocolFamily(value.protocolId, "handler transition command protocolId"),
+    handlerVersion: identifier(value.handlerVersion, "handler transition command handlerVersion"),
+  });
+}
+
+export function parseAgentOsV1PersonalTransitionCommand(
+  input: unknown
+): AgentOsV1PersonalTransitionCommand {
+  const value = record(input, "Personal transition command");
+  exact(
+    value,
+    ["from", "to", "authorityDomainChanged", "renewRemoteAuthority", "autoRecover"],
+    "Personal transition command"
+  );
+  return deepFreeze({
+    from: personalHostState(value.from, "Personal transition command from"),
+    to: personalHostState(value.to, "Personal transition command to"),
+    authorityDomainChanged: booleanValue(
+      value.authorityDomainChanged,
+      "Personal transition command authorityDomainChanged"
+    ),
+    renewRemoteAuthority: booleanValue(
+      value.renewRemoteAuthority,
+      "Personal transition command renewRemoteAuthority"
+    ),
+    autoRecover: booleanValue(value.autoRecover, "Personal transition command autoRecover"),
+  });
+}
+
+export function parseAgentOsV1ReferenceRequest<TPayload>(
+  input: unknown,
+  parsePayload: (input: unknown) => TPayload
+): AgentOsV1ReferenceRequest<TPayload> {
+  const value = record(input, "reference request");
+  exact(value, ["protocolId", "operation", "envelope", "snapshot", "payload"], "reference request");
+  const protocolId = protocolFamily(value.protocolId, "reference request protocolId");
+  const snapshot = parseAgentOsV1NegotiatedSnapshot(value.snapshot);
+  if (snapshot.protocolId !== protocolId)
+    fail("DRIFT_DETECTED", "reference request protocolId differs from its negotiated snapshot");
+  return deepFreeze({
+    protocolId,
+    operation: identifier(value.operation, "reference request operation"),
+    envelope: parseAgentOsV1AuthorityRequestEnvelope(value.envelope),
+    snapshot,
+    payload: parsePayload(value.payload),
+  });
+}
+
+export function parseAgentOsV1ReferenceResponse<TPayload>(
+  input: unknown,
+  expectedProtocolId: AgentOsV1ProtocolFamily,
+  expectedRequestId: string,
+  parsePayload: (input: unknown) => TPayload
+): AgentOsV1ReferenceResponse<TPayload> {
+  const value = record(input, "reference response");
+  exact(value, ["protocolId", "requestId", "status", "payload"], "reference response");
+  const protocolId = protocolFamily(value.protocolId, "reference response protocolId");
+  const requestId = identifier(value.requestId, "reference response requestId");
+  if (protocolId !== expectedProtocolId || requestId !== expectedRequestId)
+    fail("DRIFT_DETECTED", "reference response correlation differs from the request");
+  if (value.status !== "ok") fail("INVALID_VALUE", "reference response status must equal ok");
+  return deepFreeze({ protocolId, requestId, status: "ok", payload: parsePayload(value.payload) });
+}
+
+export function parseAgentOsV1PersonalStateProbe(input: unknown): AgentOsV1PersonalStateProbe {
+  const value = record(input, "Personal state probe");
+  exact(value, ["schemaVersion", "state", "authorityDomain", "generation"], "Personal state probe");
+  if (value.schemaVersion !== "personal-host/v1")
+    fail("UNSUPPORTED_VERSION", "Personal state probe schemaVersion must equal personal-host/v1");
+  return deepFreeze({
+    schemaVersion: "personal-host/v1",
+    state: personalHostState(value.state, "Personal state probe state"),
+    authorityDomain: identifier(value.authorityDomain, "Personal state probe authorityDomain"),
+    generation: nonNegativeInteger(value.generation, "Personal state probe generation"),
+  });
+}
+
+/** 探测只分类并给出脱离 serving path 的动作；绝不把旧/未知/损坏状态解析为 v1。 */
+export function classifyAgentOsV1PersonalState(
+  input: unknown
+): AgentOsV1PersonalStateClassification {
+  let value: Record<string, unknown>;
+  try {
+    value = record(input, "Personal persisted state");
+  } catch (error) {
+    if (!(error instanceof AgentOsV1ContractError)) throw error;
+    return deepFreeze({
+      classification: "unknown",
+      state: null,
+      allowedActions: ["quarantine", "explicit-reset"],
+    });
+  }
+  if (value.schemaVersion === "personal-host/v0") {
+    return deepFreeze({
+      classification: "recognized-legacy",
+      state: null,
+      allowedActions: ["read-only-export", "quarantine", "explicit-reset"],
+    });
+  }
+  if (value.schemaVersion !== "personal-host/v1") {
+    return deepFreeze({
+      classification: "unknown",
+      state: null,
+      allowedActions: ["quarantine", "explicit-reset"],
+    });
+  }
+  try {
+    return deepFreeze({
+      classification: "clean",
+      state: parseAgentOsV1PersonalStateProbe(value),
+      allowedActions: ["serve"],
+    });
+  } catch (error) {
+    if (!(error instanceof AgentOsV1ContractError)) throw error;
+    return deepFreeze({
+      classification: "corrupt",
+      state: null,
+      allowedActions: ["quarantine", "explicit-reset"],
+    });
+  }
 }
 
 /** 将已验证合约转换为稳定的、按键排序的 JSON 源数据。 */
@@ -1224,6 +1594,20 @@ function strings(value: unknown, label: string, pattern: RegExp): readonly strin
   return normalized;
 }
 
+function stringsAllowEmpty(value: unknown, label: string, pattern: RegExp): readonly string[] {
+  const values = arrayValues(value, label);
+  const normalized: string[] = [];
+  for (const entry of values) {
+    if (typeof entry !== "string" || !pattern.test(entry))
+      fail("INVALID_VALUE", `${label} contains an invalid value`);
+    normalized.push(entry);
+  }
+  normalized.sort();
+  if (new Set(normalized).size !== normalized.length)
+    fail("INVALID_VALUE", `${label} must contain unique values`);
+  return normalized;
+}
+
 function arrayValues(value: unknown, label: string): readonly unknown[] {
   if (!Array.isArray(value) || Object.getPrototypeOf(value) !== Array.prototype)
     fail("INVALID_SHAPE", `${label} must be a plain array`);
@@ -1260,6 +1644,127 @@ function featuresOf(value: unknown, label: string): readonly string[] {
   if (result.some((feature) => !SUPPORTED_FEATURES.has(feature)))
     fail("UNSUPPORTED_FEATURE", `${label} contains an unsupported feature`);
   return result;
+}
+
+function protocolFamily(value: unknown, label: string): AgentOsV1ProtocolFamily {
+  if (
+    value !== "execution.v1" &&
+    value !== "deployment.v1" &&
+    value !== "control.v1" &&
+    value !== "personal-local.v1"
+  )
+    fail("INVALID_VALUE", `${label} is not a registered protocol family`);
+  return value;
+}
+
+function protocolVersion(value: unknown, label: string): AgentOsV1ProtocolVersion {
+  if (typeof value !== "string" || !PROTOCOL_VERSION_PATTERN.test(value))
+    fail("INVALID_VALUE", `${label} must be a canonical major.minor version`);
+  return value as AgentOsV1ProtocolVersion;
+}
+
+function protocolVersions(value: unknown, label: string): readonly AgentOsV1ProtocolVersion[] {
+  const versions = arrayValues(value, label).map((entry) => protocolVersion(entry, label));
+  versions.sort(compareProtocolVersions);
+  if (versions.length === 0 || new Set(versions).size !== versions.length)
+    fail("INVALID_VALUE", `${label} must be a non-empty unique array`);
+  return versions;
+}
+
+function compareProtocolVersions(
+  left: AgentOsV1ProtocolVersion,
+  right: AgentOsV1ProtocolVersion
+): number {
+  const leftSeparator = left.indexOf(".");
+  const rightSeparator = right.indexOf(".");
+  const leftMajor = Number(left.slice(0, leftSeparator));
+  const rightMajor = Number(right.slice(0, rightSeparator));
+  const leftMinor = Number(left.slice(leftSeparator + 1));
+  const rightMinor = Number(right.slice(rightSeparator + 1));
+  return leftMajor - rightMajor || leftMinor - rightMinor;
+}
+
+function peerRole(value: unknown, label: string): AgentOsV1PeerRole {
+  if (
+    value !== "kernel" &&
+    value !== "control" &&
+    value !== "worker" &&
+    value !== "personal" &&
+    value !== "app"
+  )
+    fail("INVALID_VALUE", `${label} is invalid`);
+  return value;
+}
+
+function nullableHostKind(value: unknown, label: string): HostKind | null {
+  if (value === null || value === "worker" || value === "personal") return value;
+  fail("INVALID_VALUE", `${label} is invalid`);
+}
+
+function nullableManagementMode(value: unknown, label: string): ManagementMode | null {
+  if (value === null || value === "standalone" || value === "enrolled") return value;
+  fail("INVALID_VALUE", `${label} is invalid`);
+}
+
+function handlerCatalogEntry(value: unknown): AgentOsV1HandlerCatalogEntry {
+  const input = record(value, "handler catalog entry");
+  exact(
+    input,
+    ["protocolId", "handlerVersion", "lifecycle", "operations"],
+    "handler catalog entry"
+  );
+  if (input.lifecycle !== "active" && input.lifecycle !== "draining")
+    fail("INVALID_VALUE", "handler catalog entry lifecycle is invalid");
+  return deepFreeze({
+    protocolId: protocolFamily(input.protocolId, "handler catalog entry protocolId"),
+    handlerVersion: identifier(input.handlerVersion, "handler catalog entry handlerVersion"),
+    lifecycle: input.lifecycle,
+    operations: strings(input.operations, "handler catalog entry operations", IDENTIFIER_PATTERN),
+  });
+}
+
+function negotiatedSnapshotOf(value: unknown, label: string): AgentOsV1NegotiatedSnapshot {
+  const input = record(value, label);
+  exact(
+    input,
+    ["protocolId", "selectedVersion", "selectedFeatures", "schemaVersion", "handlerVersion"],
+    label
+  );
+  if (input.schemaVersion !== "agent-os/v1")
+    fail("UNSUPPORTED_VERSION", `${label} schemaVersion must equal agent-os/v1`);
+  const protocolId = protocolFamily(input.protocolId, `${label} protocolId`);
+  const selectedVersion = protocolVersion(input.selectedVersion, `${label} selectedVersion`);
+  const registered: readonly AgentOsV1ProtocolVersion[] = AGENT_OS_V1_PROTOCOL_REGISTRY[protocolId];
+  if (!registered.includes(selectedVersion))
+    fail("UNSUPPORTED_VERSION", `${label} selectedVersion is not registered`);
+  return deepFreeze({
+    protocolId,
+    selectedVersion,
+    selectedFeatures: stringsAllowEmpty(
+      input.selectedFeatures,
+      `${label} selectedFeatures`,
+      IDENTIFIER_PATTERN
+    ),
+    schemaVersion: "agent-os/v1",
+    handlerVersion: identifier(input.handlerVersion, `${label} handlerVersion`),
+  });
+}
+
+function personalHostState(value: unknown, label: string): PersonalHostState {
+  if (
+    value !== "LocalOnly" &&
+    value !== "EnrollmentPending" &&
+    value !== "ManagedOnline" &&
+    value !== "ManagedOffline" &&
+    value !== "Revoked"
+  )
+    fail("INVALID_VALUE", `${label} is invalid`);
+  return value;
+}
+
+function booleanValue(value: unknown, label: string): boolean {
+  if (typeof value !== "boolean") fail("INVALID_VALUE", `${label} must be boolean`);
+  return value;
 }
 
 function identifier(value: unknown, label: string): string {
