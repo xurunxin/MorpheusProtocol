@@ -12,6 +12,9 @@ import {
   parseAgentOsV1ActiveRunPins,
   parseAgentOsV1AuthorityRequestEnvelope,
   parseAgentOsV1Contract,
+  parseAgentOsV1ExecutionClaimBinding,
+  parseAgentOsV1ExecutionGrant,
+  parseAgentOsV1ExecutionInstance,
   parseAgentOsV1HandlerCatalogSnapshot,
   parseAgentOsV1HandlerTransitionCommand,
   parseAgentOsV1HandshakeOffer,
@@ -19,6 +22,7 @@ import {
   parseAgentOsV1NegotiatedSnapshot,
   parseAgentOsV1PersonalTransitionCommand,
   parseAgentOsV1ProtocolOffer,
+  parseAgentOsV1RemoteLeaseBinding,
   parseAgentOsV1ReferenceRequest,
   parseAgentOsV1ReferenceResponse,
 } from "../src/agent-os-v1-contract.js";
@@ -277,6 +281,101 @@ describe("Greenfield Agent OS v1 contract", () => {
       parseAgentOsV1Contract(fixture("worker", "enrolled", "provider-adapter")).agentDefinition
         .capabilityPackage.transport.kind
     ).toBe("provider-adapter");
+  });
+
+  test("exposes standalone strict execution authority codecs without changing v1 contract data", () => {
+    const contract = parseAgentOsV1Contract(fixture("worker"));
+    const source = canonicalAgentOsV1Source(contract);
+    const lease = contract.executionGrant.leaseBinding;
+    if (lease.kind !== "remote") throw new Error("Worker fixture requires a remote lease");
+
+    expect(parseAgentOsV1ExecutionGrant(contract.executionGrant)).toEqual(contract.executionGrant);
+    expect(parseAgentOsV1ExecutionInstance(contract.executionInstance)).toEqual(
+      contract.executionInstance
+    );
+    expect(parseAgentOsV1RemoteLeaseBinding(lease)).toEqual(lease);
+    expect(
+      parseAgentOsV1ExecutionClaimBinding({
+        grantId: contract.executionGrant.grantId,
+        leaseId: lease.leaseId,
+        leaseEpoch: lease.epoch,
+        authorityDomain: contract.executionGrant.authorityDomain,
+        runId: contract.executionGrant.runId,
+        attemptId: contract.executionGrant.attemptId,
+        instanceId: contract.executionGrant.instanceId,
+        instanceGeneration: contract.executionInstance.generation,
+        storeId: "store.demo",
+        storeGeneration: 7,
+        writerIncarnationId: "writer.demo",
+        claimId: "claim.demo",
+        claimFence: 3,
+        expiresAt: "2026-08-05T00:04:00.000Z",
+      })
+    ).toEqual({
+      grantId: "grant.demo",
+      leaseId: "lease.demo",
+      leaseEpoch: "lease-epoch:current",
+      authorityDomain: "authority.demo",
+      runId: "run.demo",
+      attemptId: "attempt.demo",
+      instanceId: "instance.demo",
+      instanceGeneration: 1,
+      storeId: "store.demo",
+      storeGeneration: 7,
+      writerIncarnationId: "writer.demo",
+      claimId: "claim.demo",
+      claimFence: 3,
+      expiresAt: "2026-08-05T00:04:00.000Z",
+    });
+    expect(canonicalAgentOsV1Source(parseAgentOsV1Contract(fixture("worker")))).toBe(source);
+    expect(Object.isFrozen(parseAgentOsV1ExecutionGrant(contract.executionGrant))).toBe(true);
+  });
+
+  test("standalone execution authority codecs reject unknown, sparse and invalid fence values", () => {
+    const contract = parseAgentOsV1Contract(fixture("worker"));
+    const lease = contract.executionGrant.leaseBinding;
+    if (lease.kind !== "remote") throw new Error("Worker fixture requires a remote lease");
+    const claim = {
+      grantId: contract.executionGrant.grantId,
+      leaseId: lease.leaseId,
+      leaseEpoch: lease.epoch,
+      authorityDomain: contract.executionGrant.authorityDomain,
+      runId: contract.executionGrant.runId,
+      attemptId: contract.executionGrant.attemptId,
+      instanceId: contract.executionGrant.instanceId,
+      instanceGeneration: contract.executionInstance.generation,
+      storeId: "store.demo",
+      storeGeneration: 7,
+      writerIncarnationId: "writer.demo",
+      claimId: "claim.demo",
+      claimFence: 3,
+      expiresAt: "2026-08-05T00:04:00.000Z",
+    };
+
+    expect(() =>
+      parseAgentOsV1ExecutionGrant({ ...contract.executionGrant, token: "raw" })
+    ).toThrow(AgentOsV1ContractError);
+    expect(() =>
+      parseAgentOsV1ExecutionGrant({
+        ...contract.executionGrant,
+        audience: Object.assign(new Array(2), { 1: "host.demo" }),
+      })
+    ).toThrow(AgentOsV1ContractError);
+    expect(() => parseAgentOsV1RemoteLeaseBinding({ ...lease, path: "C:\\secret" })).toThrow(
+      AgentOsV1ContractError
+    );
+    expect(() =>
+      parseAgentOsV1ExecutionClaimBinding({
+        ...claim,
+        storeGeneration: 0,
+      })
+    ).toThrow(AgentOsV1ContractError);
+    expect(() => parseAgentOsV1ExecutionClaimBinding({ ...claim, claimFence: 0 })).toThrow(
+      AgentOsV1ContractError
+    );
+    expect(() =>
+      parseAgentOsV1ExecutionClaimBinding({ ...claim, expiresAt: "2026-08-05T00:04:00Z" })
+    ).toThrow(AgentOsV1ContractError);
   });
 
   test("requires the five public field families while preserving explicit bounded empty arrays", () => {

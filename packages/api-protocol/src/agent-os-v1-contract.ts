@@ -25,6 +25,7 @@ import type {
   DeploymentBinding,
   DeploymentDesiredState,
   DigestRef,
+  ExecutionClaimBinding,
   ExecutionGrant,
   ExecutionInstance,
   ExecutionObservedState,
@@ -34,6 +35,7 @@ import type {
   LeaseBinding,
   ManagementMode,
   OpaqueRef,
+  RemoteLeaseBinding,
   RevocationGenerationRef,
   RotationGenerationRef,
   RunSpec,
@@ -70,6 +72,7 @@ export type {
   DeploymentBinding,
   DeploymentDesiredState,
   DigestRef,
+  ExecutionClaimBinding,
   ExecutionGrant,
   ExecutionInstance,
   ExecutionObservedState,
@@ -79,6 +82,7 @@ export type {
   LeaseBinding,
   ManagementMode,
   OpaqueRef,
+  RemoteLeaseBinding,
   RevocationGenerationRef,
   RotationGenerationRef,
   RunSpec,
@@ -612,6 +616,75 @@ export function parseAgentOsV1Contract(input: unknown): CanonicalAgentOsV1Contra
   } satisfies AgentOsV1Contract;
   const canonicalSource = canonicalAgentOsV1Source(canonical);
   return deepFreeze({ ...canonical, canonicalSource });
+}
+
+/** 严格解析既有 ExecutionGrant，供 Host owner 在独立持久化边界复用同一 schema。 */
+export function parseAgentOsV1ExecutionGrant(input: unknown): Readonly<ExecutionGrant> {
+  return deepFreeze(executionGrantOf(input));
+}
+
+/** 严格解析既有 ExecutionInstance，不引入第二套 placement schema。 */
+export function parseAgentOsV1ExecutionInstance(input: unknown): Readonly<ExecutionInstance> {
+  return deepFreeze(executionInstanceOf(input));
+}
+
+/** Worker 只接受 remote lease；personal/local 的 not_applicable 不能误入接管路径。 */
+export function parseAgentOsV1RemoteLeaseBinding(input: unknown): Readonly<RemoteLeaseBinding> {
+  const lease = leaseBindingOf(input);
+  if (lease.kind !== "remote") fail("INVALID_VALUE", "executionGrant.leaseBinding must be remote");
+  return deepFreeze(lease);
+}
+
+/** 解析 Worker 的本地 claim pin；授权关系与陈旧 fence 仍由持久化 owner 校验。 */
+export function parseAgentOsV1ExecutionClaimBinding(
+  input: unknown
+): Readonly<ExecutionClaimBinding> {
+  const value = record(input, "execution claim binding");
+  exact(
+    value,
+    [
+      "grantId",
+      "leaseId",
+      "leaseEpoch",
+      "authorityDomain",
+      "runId",
+      "attemptId",
+      "instanceId",
+      "instanceGeneration",
+      "storeId",
+      "storeGeneration",
+      "writerIncarnationId",
+      "claimId",
+      "claimFence",
+      "expiresAt",
+    ],
+    "execution claim binding"
+  );
+  return deepFreeze({
+    grantId: identifier(value.grantId, "execution claim binding grantId"),
+    leaseId: identifier(value.leaseId, "execution claim binding leaseId"),
+    leaseEpoch: leaseEpochRef(value.leaseEpoch, "execution claim binding leaseEpoch"),
+    authorityDomain: identifier(value.authorityDomain, "execution claim binding authorityDomain"),
+    runId: identifier(value.runId, "execution claim binding runId"),
+    attemptId: identifier(value.attemptId, "execution claim binding attemptId"),
+    instanceId: identifier(value.instanceId, "execution claim binding instanceId"),
+    instanceGeneration: nonNegativeInteger(
+      value.instanceGeneration,
+      "execution claim binding instanceGeneration"
+    ),
+    storeId: identifier(value.storeId, "execution claim binding storeId"),
+    storeGeneration: positiveInteger(
+      value.storeGeneration,
+      "execution claim binding storeGeneration"
+    ),
+    writerIncarnationId: identifier(
+      value.writerIncarnationId,
+      "execution claim binding writerIncarnationId"
+    ),
+    claimId: identifier(value.claimId, "execution claim binding claimId"),
+    claimFence: positiveInteger(value.claimFence, "execution claim binding claimFence"),
+    expiresAt: instant(value.expiresAt, "execution claim binding expiresAt"),
+  });
 }
 
 /** 严格解析一个协议 offer；版本是否已注册由 negotiation registry 决定。 */
@@ -1824,6 +1897,12 @@ function nonNegativeInteger(value: unknown, label: string): number {
   if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0)
     fail("INVALID_VALUE", `${label} must be a non-negative safe integer`);
   return value;
+}
+
+function positiveInteger(value: unknown, label: string): number {
+  const result = nonNegativeInteger(value, label);
+  if (result === 0) fail("INVALID_VALUE", `${label} must be positive`);
+  return result;
 }
 
 function instant(value: unknown, label: string): string {

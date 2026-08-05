@@ -216,6 +216,24 @@ export interface ExecutionGrant {
   readonly leaseBinding: Readonly<LeaseBinding>;
 }
 
+/** Worker 持久化的执行所有权 pin；它绑定现有授权与 Kernel fence，不创建新的 authority。 */
+export interface ExecutionClaimBinding {
+  readonly grantId: string;
+  readonly leaseId: string;
+  readonly leaseEpoch: LeaseEpochRef;
+  readonly authorityDomain: string;
+  readonly runId: string;
+  readonly attemptId: string;
+  readonly instanceId: string;
+  readonly instanceGeneration: number;
+  readonly storeId: string;
+  readonly storeGeneration: number;
+  readonly writerIncarnationId: string;
+  readonly claimId: string;
+  readonly claimFence: number;
+  readonly expiresAt: string;
+}
+
 /** 协商 offer 只描述协议能力，不拥有连接或 handler 生命周期。 */
 export interface AgentOsV1ProtocolOffer {
   readonly protocolId: AgentOsV1ProtocolFamily;
