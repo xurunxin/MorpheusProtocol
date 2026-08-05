@@ -10,12 +10,59 @@ export type DeploymentTarget = "worker" | "control" | "personal";
 export type GrantKind = "local" | "remote" | "delegated";
 export type PackageTransportKind = "mcp" | "skill" | "plugin" | "provider-adapter";
 export type NetworkConstraint = "none" | "egress-restricted";
+export type DeploymentDesiredState = "active" | "suspended";
+export type ExecutionObservedState = "pending" | "running" | "stopped" | "failed";
 
 export interface EnvironmentConstraints {
   readonly operatingSystems: readonly string[];
   readonly architectures: readonly string[];
   readonly network: NetworkConstraint;
 }
+
+/** 不可解引用的内容地址引用；公开 v1 不携带本地路径、token 或 credential。 */
+export interface DigestRef {
+  readonly ref: string;
+  readonly digest: string;
+}
+
+/** 一个能力需求固定其稳定标识和承载它的 package digest。 */
+export interface CapabilityRequirement {
+  readonly id: string;
+  readonly packageDigest: string;
+}
+
+export interface AgentIdentity {
+  readonly tenantId: string;
+  readonly workloadId: string;
+}
+
+export interface DeploymentBinding extends DigestRef {
+  readonly bindingId: string;
+}
+
+export interface SessionGrant {
+  readonly grantId: string;
+  readonly principalId: string;
+  readonly scope: readonly string[];
+  readonly notBefore: string;
+  readonly expiresAt: string;
+}
+
+export interface NotApplicableLeaseBinding {
+  readonly kind: "not_applicable";
+}
+
+export interface RemoteLeaseBinding {
+  readonly kind: "remote";
+  readonly leaseId: string;
+  readonly epoch: number;
+  readonly generation: number;
+  readonly scope: readonly string[];
+  readonly notBefore: string;
+  readonly expiresAt: string;
+}
+
+export type LeaseBinding = NotApplicableLeaseBinding | RemoteLeaseBinding;
 
 /** 所有 secret 都只能以不可解引用的引用名表达，绝不携带 secret 值。 */
 export interface CapabilityPackageDescriptor {
@@ -52,8 +99,12 @@ export interface CapabilityPackageDescriptor {
 export interface AgentDefinition {
   readonly agentId: string;
   readonly version: string;
+  readonly identity: Readonly<AgentIdentity>;
   readonly capabilityPackage: Readonly<CapabilityPackageDescriptor>;
   readonly requestedScopes: readonly string[];
+  readonly skills: readonly CapabilityRequirement[];
+  readonly tools: readonly CapabilityRequirement[];
+  readonly securityPolicy: Readonly<DigestRef>;
 }
 
 export interface HostProfile {
@@ -64,6 +115,11 @@ export interface HostProfile {
   readonly authorityDomain: string;
   readonly capabilityCeiling: readonly string[];
   readonly supportedFeatures: readonly string[];
+  readonly providerCeiling: Readonly<DigestRef>;
+  readonly workspaceCeiling: Readonly<DigestRef>;
+  readonly storageCeiling: Readonly<DigestRef>;
+  readonly networkCeiling: Readonly<DigestRef>;
+  readonly lifecycleCeiling: Readonly<DigestRef>;
 }
 
 export interface AgentDeployment {
@@ -73,6 +129,11 @@ export interface AgentDeployment {
   readonly agentVersion: string;
   readonly hostId: string;
   readonly capabilityDigest: string;
+  readonly desiredState: DeploymentDesiredState;
+  readonly revision: string;
+  readonly desiredReplicas: number;
+  readonly placementPolicy: Readonly<DigestRef>;
+  readonly bindings: readonly DeploymentBinding[];
 }
 
 export interface ExecutionInstance {
@@ -80,6 +141,9 @@ export interface ExecutionInstance {
   readonly deploymentId: string;
   readonly hostId: string;
   readonly generation: number;
+  readonly deploymentRevision: string;
+  readonly replicaOrdinal: number;
+  readonly observedState: ExecutionObservedState;
 }
 
 export interface RunSpec {
@@ -87,6 +151,9 @@ export interface RunSpec {
   readonly deploymentId: string;
   readonly capabilityScopes: readonly string[];
   readonly requiredFeatures: readonly string[];
+  readonly definitionDigest: string;
+  readonly policyDigest: string;
+  readonly capabilityDigest: string;
 }
 
 export interface ExecutionGrant {
@@ -98,10 +165,21 @@ export interface ExecutionGrant {
   readonly hostId: string;
   readonly deploymentId: string;
   readonly runId: string;
+  readonly tenantId: string;
+  readonly workloadId: string;
+  readonly attemptId: string;
+  readonly instanceId: string;
+  readonly definitionDigest: string;
+  readonly policyDigest: string;
   readonly capabilityDigest: string;
+  readonly keyId: string;
+  readonly rotationGeneration: number;
+  readonly revocationGeneration: number;
   readonly scope: readonly string[];
   readonly notBefore: string;
   readonly expiresAt: string;
+  readonly sessionGrant: Readonly<SessionGrant>;
+  readonly leaseBinding: Readonly<LeaseBinding>;
 }
 
 export interface AgentOsV1Contract {

@@ -5,6 +5,7 @@ import {
   AGENT_OS_V1_CONTRACT_SCHEMA,
   AgentOsV1ContractError,
   canonicalAgentOsV1Source,
+  createAgentDefinitionDigest,
   createCapabilityPackageDescriptorDigest,
   parseAgentOsV1Contract,
 } from "../src/agent-os-v1-contract.js";
@@ -38,6 +39,14 @@ function capabilityPackage(
   return { ...unsigned, digest: createCapabilityPackageDescriptorDigest(unsigned) };
 }
 
+function digest(seed: string): string {
+  return `sha256:${createHash("sha256").update(seed).digest("hex")}`;
+}
+
+function digestRef(ref: string) {
+  return { ref, digest: digest(ref) };
+}
+
 function fixture(
   target: "worker" | "control" | "personal" = "worker",
   managementMode: "standalone" | "enrolled" = "enrolled",
@@ -46,15 +55,40 @@ function fixture(
   const hostKind = target === "personal" ? "personal" : "worker";
   const grantKind = target === "personal" && managementMode === "standalone" ? "local" : "remote";
   const packageDescriptor = capabilityPackage(transportKind);
+  const agentDefinition = {
+    agentId: "agent.demo",
+    version: "1.0",
+    identity: { tenantId: "tenant.demo", workloadId: "workload.demo" },
+    capabilityPackage: packageDescriptor,
+    requestedScopes: ["workspace.read"],
+    skills: [{ id: "skill.demo", packageDigest: packageDescriptor.digest }],
+    tools: [{ id: "tool.demo", packageDigest: packageDescriptor.digest }],
+    securityPolicy: digestRef("security-policy.demo"),
+  } satisfies AgentOsV1Contract["agentDefinition"];
+  const definitionDigest = createAgentDefinitionDigest(agentDefinition);
+  const sessionGrant = {
+    grantId: "session-grant.demo",
+    principalId: "principal.demo",
+    scope: ["workspace.read"],
+    notBefore: "2026-08-05T00:00:00.000Z",
+    expiresAt: "2026-08-05T00:10:00.000Z",
+  };
+  const leaseBinding =
+    grantKind === "local"
+      ? ({ kind: "not_applicable" } as const)
+      : {
+          kind: "remote" as const,
+          leaseId: "lease.demo",
+          epoch: 1,
+          generation: 1,
+          scope: ["workspace.read"],
+          notBefore: "2026-08-05T00:00:00.000Z",
+          expiresAt: "2026-08-05T00:10:00.000Z",
+        };
   return {
     schemaVersion: "agent-os/v1",
     features: ["capability-packages", "delegation-grants"],
-    agentDefinition: {
-      agentId: "agent.demo",
-      version: "1.0",
-      capabilityPackage: packageDescriptor,
-      requestedScopes: ["workspace.read"],
-    },
+    agentDefinition,
     hostProfile: {
       hostId: "host.demo",
       hostKind,
@@ -63,6 +97,11 @@ function fixture(
       authorityDomain: "authority.demo",
       capabilityCeiling: ["workspace.read"],
       supportedFeatures: ["capability-packages", "delegation-grants"],
+      providerCeiling: digestRef("provider-ceiling.demo"),
+      workspaceCeiling: digestRef("workspace-ceiling.demo"),
+      storageCeiling: digestRef("storage-ceiling.demo"),
+      networkCeiling: digestRef("network-ceiling.demo"),
+      lifecycleCeiling: digestRef("lifecycle-ceiling.demo"),
     },
     agentDeployment: {
       deploymentId: "deployment.demo",
@@ -71,18 +110,29 @@ function fixture(
       agentVersion: "1.0",
       hostId: "host.demo",
       capabilityDigest: packageDescriptor.digest,
+      desiredState: "active",
+      revision: "revision.demo",
+      desiredReplicas: 1,
+      placementPolicy: digestRef("placement-policy.demo"),
+      bindings: [],
     },
     executionInstance: {
       instanceId: "instance.demo",
       deploymentId: "deployment.demo",
       hostId: "host.demo",
       generation: 1,
+      deploymentRevision: "revision.demo",
+      replicaOrdinal: 0,
+      observedState: "running",
     },
     runSpec: {
       runId: "run.demo",
       deploymentId: "deployment.demo",
       capabilityScopes: ["workspace.read"],
       requiredFeatures: ["capability-packages", "delegation-grants"],
+      definitionDigest,
+      policyDigest: agentDefinition.securityPolicy.digest,
+      capabilityDigest: packageDescriptor.digest,
     },
     executionGrant: {
       grantId: "grant.demo",
@@ -93,16 +143,34 @@ function fixture(
       hostId: "host.demo",
       deploymentId: "deployment.demo",
       runId: "run.demo",
+      tenantId: "tenant.demo",
+      workloadId: "workload.demo",
+      attemptId: "attempt.demo",
+      instanceId: "instance.demo",
+      definitionDigest,
+      policyDigest: agentDefinition.securityPolicy.digest,
       capabilityDigest: packageDescriptor.digest,
+      keyId: "grant-key.demo",
+      rotationGeneration: 1,
+      revocationGeneration: packageDescriptor.revocation.generation,
       scope: ["workspace.read"],
       notBefore: "2026-08-05T00:00:00.000Z",
       expiresAt: "2026-08-05T00:05:00.000Z",
+      sessionGrant,
+      leaseBinding,
     },
   };
 }
 
 function copy(value: AgentOsV1Contract): Record<string, unknown> {
   return JSON.parse(JSON.stringify(value)) as Record<string, unknown>;
+}
+
+function rebindDefinitionDigest(value: Record<string, unknown>): void {
+  const definition = value.agentDefinition as AgentOsV1Contract["agentDefinition"];
+  const definitionDigest = createAgentDefinitionDigest(definition);
+  (value.runSpec as Record<string, unknown>).definitionDigest = definitionDigest;
+  (value.executionGrant as Record<string, unknown>).definitionDigest = definitionDigest;
 }
 
 function expectReject(value: unknown): void {
@@ -132,7 +200,23 @@ describe("Greenfield Agent OS v1 contract", () => {
     );
     expect(AGENT_OS_V1_CONTRACT_SCHEMA.additionalProperties).toBe(false);
     expect(AGENT_OS_V1_CONTRACT_SCHEMA.$defs.capabilityPackage.additionalProperties).toBe(false);
+    expect(AGENT_OS_V1_CONTRACT_SCHEMA.$defs.agentDefinition.required).toEqual(
+      expect.arrayContaining(["identity", "skills", "tools", "securityPolicy"])
+    );
+    expect(AGENT_OS_V1_CONTRACT_SCHEMA.$defs.hostProfile.required).toEqual(
+      expect.arrayContaining([
+        "providerCeiling",
+        "workspaceCeiling",
+        "storageCeiling",
+        "networkCeiling",
+        "lifecycleCeiling",
+      ])
+    );
+    expect(AGENT_OS_V1_CONTRACT_SCHEMA.$defs.leaseBinding.oneOf).toHaveLength(2);
     expect(AGENT_OS_V1_CONTRACT_SCHEMA.$defs.executionGrant.required).toContain("scope");
+    expect(AGENT_OS_V1_CONTRACT_SCHEMA.$defs.executionGrant.required).toEqual(
+      expect.arrayContaining(["sessionGrant", "leaseBinding", "attemptId", "instanceId"])
+    );
     expect(Object.isFrozen(AGENT_OS_V1_CONTRACT_SCHEMA)).toBe(true);
     expect(Object.isFrozen(AGENT_OS_V1_CONTRACT_SCHEMA.$defs)).toBe(true);
     expect(Object.isFrozen(AGENT_OS_V1_CONTRACT_SCHEMA.$defs.executionGrant)).toBe(true);
@@ -158,6 +242,25 @@ describe("Greenfield Agent OS v1 contract", () => {
       parseAgentOsV1Contract(fixture("worker", "enrolled", "provider-adapter")).agentDefinition
         .capabilityPackage.transport.kind
     ).toBe("provider-adapter");
+  });
+
+  test("requires the five public field families while preserving explicit bounded empty arrays", () => {
+    const bounded = copy(fixture());
+    (bounded.agentDefinition as Record<string, unknown>).skills = [];
+    (bounded.agentDefinition as Record<string, unknown>).tools = [];
+    (bounded.agentDeployment as Record<string, unknown>).bindings = [];
+    rebindDefinitionDigest(bounded);
+    const parsed = parseAgentOsV1Contract(bounded);
+    expect(parsed.agentDefinition.skills).toEqual([]);
+    expect(parsed.agentDefinition.tools).toEqual([]);
+    expect(parsed.agentDeployment.bindings).toEqual([]);
+    expect(parsed.executionInstance.deploymentRevision).toBe(parsed.agentDeployment.revision);
+    expect(parsed.executionGrant.tenantId).toBe(parsed.agentDefinition.identity.tenantId);
+    expect(parsed.executionGrant.definitionDigest).toBe(parsed.runSpec.definitionDigest);
+
+    const oldNarrowPayload = copy(fixture());
+    delete (oldNarrowPayload.agentDefinition as Record<string, unknown>).identity;
+    expectReject(oldNarrowPayload);
   });
 
   test("returns canonical deeply immutable source data", () => {
@@ -248,6 +351,87 @@ describe("Greenfield Agent OS v1 contract", () => {
     expectReject(forged);
   });
 
+  test("rejects duplicate capability or binding requirements and raw path references", () => {
+    const duplicateSkill = copy(fixture());
+    const skills = (duplicateSkill.agentDefinition as Record<string, unknown>).skills as Record<
+      string,
+      unknown
+    >[];
+    skills.push({ ...skills[0]! });
+    rebindDefinitionDigest(duplicateSkill);
+    expectReject(duplicateSkill);
+
+    const duplicateBinding = copy(fixture());
+    (duplicateBinding.agentDeployment as Record<string, unknown>).bindings = [
+      {
+        bindingId: "binding.demo",
+        ref: "binding-ref.demo",
+        digest: digest("binding.demo"),
+      },
+      {
+        bindingId: "binding.demo",
+        ref: "binding-ref.other",
+        digest: digest("binding.other"),
+      },
+    ];
+    expectReject(duplicateBinding);
+
+    const rawWorkspacePath = copy(fixture());
+    (rawWorkspacePath.hostProfile as Record<string, unknown>).workspaceCeiling = {
+      ref: "/workspace/demo",
+      digest: digest("workspace-path"),
+    };
+    expectReject(rawWorkspacePath);
+  });
+
+  test("fails closed when grant tuple, scope, time, generation or lease binding drifts", () => {
+    const tuple = copy(fixture());
+    (tuple.executionGrant as Record<string, unknown>).instanceId = "instance.other";
+    expectReject(tuple);
+
+    const sessionScope = copy(fixture());
+    (
+      (sessionScope.executionGrant as Record<string, unknown>).sessionGrant as Record<
+        string,
+        unknown
+      >
+    ).scope = ["workspace.write"];
+    expectReject(sessionScope);
+
+    const sessionTime = copy(fixture());
+    (
+      (sessionTime.executionGrant as Record<string, unknown>).sessionGrant as Record<
+        string,
+        unknown
+      >
+    ).expiresAt = "2026-08-05T00:03:00.000Z";
+    expectReject(sessionTime);
+
+    const generation = copy(fixture());
+    (
+      (generation.executionGrant as Record<string, unknown>).leaseBinding as Record<string, unknown>
+    ).generation = 2;
+    expectReject(generation);
+
+    const remoteWithoutLease = copy(fixture());
+    (remoteWithoutLease.executionGrant as Record<string, unknown>).leaseBinding = {
+      kind: "not_applicable",
+    };
+    expectReject(remoteWithoutLease);
+
+    const localWithRemoteLease = copy(fixture("personal", "standalone"));
+    (localWithRemoteLease.executionGrant as Record<string, unknown>).leaseBinding = {
+      kind: "remote",
+      leaseId: "lease.demo",
+      epoch: 1,
+      generation: 1,
+      scope: ["workspace.read"],
+      notBefore: "2026-08-05T00:00:00.000Z",
+      expiresAt: "2026-08-05T00:10:00.000Z",
+    };
+    expectReject(localWithRemoteLease);
+  });
+
   test("fails closed on remote/delegated scope or audience expansion and Personal ceiling expansion", () => {
     const scope = copy(fixture());
     (scope.executionGrant as Record<string, unknown>).scope = ["workspace.read", "workspace.write"];
@@ -273,6 +457,7 @@ describe("Greenfield Agent OS v1 contract", () => {
     (personal.executionGrant as Record<string, unknown>).scope = ["workspace.write"];
     (personal.runSpec as Record<string, unknown>).capabilityScopes = ["workspace.write"];
     (personal.agentDefinition as Record<string, unknown>).requestedScopes = ["workspace.write"];
+    rebindDefinitionDigest(personal);
     expectReject(personal);
   });
 });
