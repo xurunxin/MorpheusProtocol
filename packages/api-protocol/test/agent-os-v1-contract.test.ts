@@ -5,12 +5,24 @@ import {
   AGENT_OS_V1_CONTRACT_SCHEMA,
   AgentOsV1ContractError,
   canonicalAgentOsV1Source,
+  assertAgentOsV1CanonicalPromptSemanticBinding,
+  createAgentOsV1CanonicalPromptSemanticBinding,
   createAgentDefinitionDigest,
   createCapabilityPackageDescriptorDigest,
   classifyAgentOsV1PersonalState,
+  createAgentOsV1CanonicalPromptCursor,
+  createAgentOsV1CanonicalPromptEvent,
+  createAgentOsV1CanonicalPromptSnapshot,
   parseAgentOsV1ActiveRunPin,
   parseAgentOsV1ActiveRunPins,
   parseAgentOsV1AuthorityRequestEnvelope,
+  parseAgentOsV1CanonicalPromptStartRequest,
+  parseAgentOsV1CanonicalPromptCursor,
+  parseAgentOsV1CanonicalPromptCancelRequest,
+  parseAgentOsV1CanonicalPromptEvent,
+  parseAgentOsV1CanonicalPromptReadRequest,
+  parseAgentOsV1CanonicalPromptResponse,
+  parseAgentOsV1CanonicalPromptSnapshot,
   parseAgentOsV1Contract,
   parseAgentOsV1ExecutionClaimBinding,
   parseAgentOsV1ExecutionGrant,
@@ -949,5 +961,313 @@ describe("Agent OS v1 strict reference DTO codecs", () => {
         generation: -1,
       }).classification
     ).toBe("corrupt");
+  });
+
+  test("strictly parses and freezes the canonical prompt.start authority binding", () => {
+    const contract = fixture();
+    const startDraft = {
+      schemaVersion: "agent-os-canonical-prompt/v1",
+      operation: "prompt.start",
+      runId: contract.executionGrant.runId,
+      turnId: "turn.demo",
+      attemptId: contract.executionGrant.attemptId,
+      instanceId: contract.executionInstance.instanceId,
+      storeGeneration: 1,
+      claimId: "claim.demo",
+      requestedAt: "2026-08-05T00:00:01.000Z",
+      authority: {
+        tenantId: contract.executionGrant.tenantId,
+        workloadId: contract.executionGrant.workloadId,
+        authorityDomain: contract.executionGrant.authorityDomain,
+        audience: contract.executionGrant.audience,
+        definitionDigest: contract.executionGrant.definitionDigest,
+        policyDigest: contract.executionGrant.policyDigest,
+        capabilityDigest: contract.executionGrant.capabilityDigest,
+      },
+      grant: contract.executionGrant,
+      instance: contract.executionInstance,
+      prompt: { messages: [{ role: "user", content: "hello" }] },
+    };
+    const start = createAgentOsV1CanonicalPromptSemanticBinding({
+      requestId: "request-start",
+      expectedRevision: 0,
+      snapshot: {
+        protocolId: "execution.v1",
+        selectedVersion: "1.1",
+        selectedFeatures: ["recover"],
+        schemaVersion: "agent-os/v1",
+        handlerVersion: "handler-1.1.0",
+      },
+      payload: startDraft,
+    }).payload;
+
+    const parsed = parseAgentOsV1CanonicalPromptStartRequest(start);
+    expect(parsed).toEqual(start);
+    expect(Object.isFrozen(parsed)).toBe(true);
+    expect(Object.isFrozen(parsed.prompt.messages)).toBe(true);
+    expect(Object.isFrozen(parsed.grant)).toBe(true);
+
+    expect(() =>
+      parseAgentOsV1CanonicalPromptStartRequest({ ...start, apiKey: "raw-secret" })
+    ).toThrow(AgentOsV1ContractError);
+    expect(() =>
+      parseAgentOsV1CanonicalPromptStartRequest({ ...start, storeGeneration: 2 ** 53 })
+    ).toThrow(AgentOsV1ContractError);
+    expect(() =>
+      parseAgentOsV1CanonicalPromptStartRequest({
+        ...start,
+        requestedAt: "2026-08-05T00:00:01Z",
+      })
+    ).toThrow(AgentOsV1ContractError);
+    expect(() =>
+      parseAgentOsV1CanonicalPromptStartRequest({
+        ...start,
+        prompt: { messages: new Array(1) },
+      })
+    ).toThrow(AgentOsV1ContractError);
+    expect(() =>
+      parseAgentOsV1CanonicalPromptStartRequest({
+        ...start,
+        prompt: { messages: [{ role: "user", content: "x".repeat(65_537) }] },
+      })
+    ).toThrow(AgentOsV1ContractError);
+  });
+
+  test("binds prompt, intent and execution envelope semantics with canonical digests", () => {
+    const contract = fixture();
+    const snapshot = {
+      protocolId: "execution.v1",
+      selectedVersion: "1.1",
+      selectedFeatures: ["recover"],
+      schemaVersion: "agent-os/v1",
+      handlerVersion: "handler-1.1.0",
+    } as const;
+    const draft = {
+      schemaVersion: "agent-os-canonical-prompt/v1",
+      operation: "prompt.start",
+      runId: contract.executionGrant.runId,
+      turnId: "turn.semantic",
+      attemptId: contract.executionGrant.attemptId,
+      instanceId: contract.executionInstance.instanceId,
+      storeGeneration: 1,
+      claimId: "claim.semantic",
+      requestedAt: "2026-08-05T00:00:01.000Z",
+      authority: {
+        tenantId: contract.executionGrant.tenantId,
+        workloadId: contract.executionGrant.workloadId,
+        authorityDomain: contract.executionGrant.authorityDomain,
+        audience: contract.executionGrant.audience,
+        definitionDigest: contract.executionGrant.definitionDigest,
+        policyDigest: contract.executionGrant.policyDigest,
+        capabilityDigest: contract.executionGrant.capabilityDigest,
+      },
+      grant: contract.executionGrant,
+      instance: contract.executionInstance,
+      prompt: { messages: [{ role: "user", content: "semantic hello" }] },
+    } as const;
+    const bound = createAgentOsV1CanonicalPromptSemanticBinding({
+      requestId: "request-semantic",
+      expectedRevision: 0,
+      snapshot,
+      payload: draft,
+    });
+    const envelope = {
+      requestId: "request-semantic",
+      deadline: "2026-08-05T00:01:00.000Z",
+      expectedRevision: 0,
+      authorityEnvelopeRef: bound.authorityEnvelopeRef,
+    };
+
+    expect(
+      assertAgentOsV1CanonicalPromptSemanticBinding(envelope, snapshot, bound.payload)
+    ).toEqual(bound);
+    for (const payload of [
+      { ...bound.payload, promptDigest: digest("forged-prompt") },
+      { ...bound.payload, intentDigest: digest("forged-intent") },
+      { ...bound.payload, prompt: { messages: [{ role: "user", content: "tampered" }] } },
+    ]) {
+      expect(() =>
+        assertAgentOsV1CanonicalPromptSemanticBinding(envelope, snapshot, payload)
+      ).toThrow(AgentOsV1ContractError);
+    }
+    expect(() =>
+      assertAgentOsV1CanonicalPromptSemanticBinding(
+        {
+          ...envelope,
+          authorityEnvelopeRef: {
+            ...bound.authorityEnvelopeRef,
+            digest: digest("forged-envelope"),
+          },
+        },
+        snapshot,
+        bound.payload
+      )
+    ).toThrow(AgentOsV1ContractError);
+    expect(() =>
+      assertAgentOsV1CanonicalPromptSemanticBinding(
+        { ...envelope, authorityEnvelopeRef: digestRef("authority:forged") },
+        snapshot,
+        bound.payload
+      )
+    ).toThrow(AgentOsV1ContractError);
+  });
+
+  test("creates tamper-evident immutable event, cursor and snapshot DTOs", () => {
+    const event = createAgentOsV1CanonicalPromptEvent({
+      schemaVersion: "agent-os-canonical-prompt/v1",
+      eventId: "event.demo.1",
+      runId: "run.demo",
+      attemptId: "attempt.demo",
+      streamEpoch: "stream-epoch:epoch.demo",
+      sequence: 1,
+      eventType: "provider.usage",
+      payload: { inputTokens: 2, outputTokens: 3 },
+      createdAt: "2026-08-05T00:00:02.000Z",
+    });
+    const cursor = createAgentOsV1CanonicalPromptCursor({
+      schemaVersion: "agent-os-canonical-prompt/v1",
+      runId: "run.demo",
+      streamEpoch: "stream-epoch:epoch.demo",
+      sequence: 1,
+      watermark: 1,
+    });
+    const snapshot = createAgentOsV1CanonicalPromptSnapshot({
+      schemaVersion: "agent-os-canonical-prompt/v1",
+      runId: "run.demo",
+      attemptId: "attempt.demo",
+      instanceId: "instance.demo",
+      storeGeneration: 1,
+      streamEpoch: "stream-epoch:epoch.demo",
+      watermark: 1,
+      state: "running",
+      terminal: false,
+      updatedAt: "2026-08-05T00:00:02.000Z",
+    });
+
+    expect(parseAgentOsV1CanonicalPromptEvent(event)).toEqual(event);
+    expect(parseAgentOsV1CanonicalPromptCursor(cursor)).toEqual(cursor);
+    expect(parseAgentOsV1CanonicalPromptSnapshot(snapshot)).toEqual(snapshot);
+    expect(Object.isFrozen(event.payload)).toBe(true);
+    expect(Object.isFrozen(cursor)).toBe(true);
+    expect(Object.isFrozen(snapshot)).toBe(true);
+
+    expect(() => parseAgentOsV1CanonicalPromptEvent({ ...event, sequence: 2 })).toThrow(
+      AgentOsV1ContractError
+    );
+    expect(() => parseAgentOsV1CanonicalPromptCursor({ ...cursor, watermark: 2 })).toThrow(
+      AgentOsV1ContractError
+    );
+    expect(() =>
+      parseAgentOsV1CanonicalPromptSnapshot({ ...snapshot, state: "succeeded" })
+    ).toThrow(AgentOsV1ContractError);
+    expect(() =>
+      createAgentOsV1CanonicalPromptEvent({
+        ...event,
+        digest: undefined,
+        payload: { inputTokens: 2, outputTokens: 3, rawUsage: "secret" },
+      })
+    ).toThrow(AgentOsV1ContractError);
+  });
+
+  test("strictly correlates prompt.read, prompt.cancel and atomic snapshot-required responses", () => {
+    const snapshot = createAgentOsV1CanonicalPromptSnapshot({
+      schemaVersion: "agent-os-canonical-prompt/v1",
+      runId: "run.demo",
+      attemptId: "attempt.demo",
+      instanceId: "instance.demo",
+      storeGeneration: 2,
+      streamEpoch: "stream-epoch:epoch.demo",
+      watermark: 3,
+      state: "running",
+      terminal: false,
+      updatedAt: "2026-08-05T00:00:03.000Z",
+    });
+    const cursor = createAgentOsV1CanonicalPromptCursor({
+      schemaVersion: "agent-os-canonical-prompt/v1",
+      runId: "run.demo",
+      streamEpoch: "stream-epoch:epoch.demo",
+      sequence: 3,
+      watermark: 3,
+    });
+    const read = parseAgentOsV1CanonicalPromptReadRequest({
+      schemaVersion: "agent-os-canonical-prompt/v1",
+      operation: "prompt.read",
+      runId: "run.demo",
+      cursor,
+      limit: 64,
+      readAt: "2026-08-05T00:00:04.000Z",
+    });
+    const cancel = parseAgentOsV1CanonicalPromptCancelRequest({
+      schemaVersion: "agent-os-canonical-prompt/v1",
+      operation: "prompt.cancel",
+      runId: "run.demo",
+      claimId: "claim.demo",
+      claimFence: 2,
+      reason: "user-requested",
+      resultDigest: digest("cancelled"),
+      cancelledAt: "2026-08-05T00:00:04.000Z",
+    });
+    const snapshotEvents = [1, 2, 3].map((sequence) =>
+      createAgentOsV1CanonicalPromptEvent({
+        schemaVersion: "agent-os-canonical-prompt/v1",
+        eventId: `event.demo.${sequence}`,
+        runId: "run.demo",
+        attemptId: "attempt.demo",
+        streamEpoch: "stream-epoch:epoch.demo",
+        sequence,
+        eventType: "provider.output",
+        payload: { text: `rebuilt-${sequence}` },
+        createdAt: `2026-08-05T00:00:0${sequence}.000Z`,
+      })
+    );
+    expect(read.cursor).toEqual(cursor);
+    expect(cancel.claimFence).toBe(2);
+    expect(
+      parseAgentOsV1CanonicalPromptResponse({
+        schemaVersion: "agent-os-canonical-prompt/v1",
+        operation: "prompt.read",
+        disposition: "snapshot-required",
+        snapshot,
+        events: snapshotEvents,
+        cursor,
+        replayed: false,
+      })
+    ).toEqual({
+      schemaVersion: "agent-os-canonical-prompt/v1",
+      operation: "prompt.read",
+      disposition: "snapshot-required",
+      snapshot,
+      events: snapshotEvents,
+      cursor,
+      replayed: false,
+    });
+
+    const crossRunCursor = createAgentOsV1CanonicalPromptCursor({
+      schemaVersion: "agent-os-canonical-prompt/v1",
+      runId: "run.other",
+      streamEpoch: "stream-epoch:epoch.demo",
+      sequence: 3,
+      watermark: 3,
+    });
+    expect(() =>
+      parseAgentOsV1CanonicalPromptReadRequest({ ...read, cursor: crossRunCursor })
+    ).toThrow(AgentOsV1ContractError);
+    expect(() =>
+      parseAgentOsV1CanonicalPromptCancelRequest({
+        ...cancel,
+        claimFence: Number.MAX_SAFE_INTEGER + 1,
+      })
+    ).toThrow(AgentOsV1ContractError);
+    expect(() =>
+      parseAgentOsV1CanonicalPromptResponse({
+        schemaVersion: "agent-os-canonical-prompt/v1",
+        operation: "prompt.read",
+        disposition: "snapshot-required",
+        snapshot,
+        events: snapshotEvents.slice(1),
+        cursor,
+        replayed: false,
+      })
+    ).toThrow(AgentOsV1ContractError);
   });
 });

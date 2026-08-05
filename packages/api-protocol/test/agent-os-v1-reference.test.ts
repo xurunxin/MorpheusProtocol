@@ -2,15 +2,24 @@ import { describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
 
 import type {
+  AgentOsV1CanonicalPromptResponse,
   AgentOsV1HandshakeOffer,
   AgentOsV1NegotiatedSnapshot,
   AgentOsV1ProtocolFamily,
 } from "../src/agent-os-v1-types.js";
-import { AgentOsV1ContractError } from "../src/agent-os-v1-contract.js";
+import {
+  AgentOsV1ContractError,
+  createAgentOsV1CanonicalPromptEvent,
+  createAgentOsV1CanonicalPromptSemanticBinding,
+  createAgentOsV1CanonicalPromptCursor,
+  createAgentOsV1CanonicalPromptSnapshot,
+} from "../src/agent-os-v1-contract.js";
 import {
   AGENT_OS_V1_PROTOCOL_REGISTRY,
   AgentOsV1ReferenceError,
   createAgentOsV1ReferenceClient,
+  createAgentOsV1CanonicalPromptReferenceClient,
+  dispatchAgentOsV1CanonicalPromptReference,
   dispatchAgentOsV1Reference,
   negotiateAgentOsV1Handshake,
   planAgentOsV1HandlerTransition,
@@ -130,6 +139,397 @@ const ECHO_CODECS = Object.freeze({
   request: (input: unknown) =>
     strictRecord(input, "value", "string") as Readonly<{ value: string }>,
   response: (input: unknown) => strictRecord(input, "echo", "string") as Readonly<{ echo: string }>,
+});
+
+describe("Agent OS v1 canonical prompt reference transport", () => {
+  test("passes the same strict fixture through an injected client and full-context provider", async () => {
+    const snapshot = acceptedSnapshot("execution.v1");
+    const pin = activePin(snapshot);
+    const ownerCatalog = {
+      revision: 1,
+      handlers: [
+        {
+          protocolId: "execution.v1",
+          handlerVersion: snapshot.handlerVersion,
+          lifecycle: "active",
+          operations: ["prompt.cancel", "prompt.read", "prompt.start"],
+        },
+      ],
+    };
+    const projection = createAgentOsV1CanonicalPromptSnapshot({
+      schemaVersion: "agent-os-canonical-prompt/v1",
+      runId: "run-0001",
+      attemptId: "attempt-0001",
+      instanceId: "instance-0001",
+      storeGeneration: 1,
+      streamEpoch: "stream-epoch:epoch-0001",
+      watermark: 0,
+      state: "running",
+      terminal: false,
+      updatedAt: "2026-08-05T12:00:00.000Z",
+    });
+    const cursor = createAgentOsV1CanonicalPromptCursor({
+      schemaVersion: "agent-os-canonical-prompt/v1",
+      runId: "run-0001",
+      streamEpoch: "stream-epoch:epoch-0001",
+      sequence: 0,
+      watermark: 0,
+    });
+    const readPayload = {
+      schemaVersion: "agent-os-canonical-prompt/v1",
+      operation: "prompt.read",
+      runId: "run-0001",
+      cursor: null,
+      limit: 16,
+      readAt: "2026-08-05T12:00:00.000Z",
+    } as const;
+    const semanticBinding = createAgentOsV1CanonicalPromptSemanticBinding({
+      requestId: "request-0001",
+      expectedRevision: 4,
+      snapshot,
+      payload: readPayload,
+    });
+    const canonicalEnvelope = {
+      ...authorityEnvelope(),
+      authorityEnvelopeRef: semanticBinding.authorityEnvelopeRef,
+    };
+    const seen: unknown[] = [];
+    const transport = async (request: unknown) =>
+      dispatchAgentOsV1CanonicalPromptReference(
+        request,
+        ownerCatalog,
+        pin,
+        [
+          {
+            protocolId: "execution.v1",
+            handlerVersion: snapshot.handlerVersion,
+            operation: "prompt.read",
+            handle(fullRequest) {
+              seen.push(fullRequest);
+              return {
+                schemaVersion: "agent-os-canonical-prompt/v1",
+                operation: "prompt.read",
+                disposition: "events",
+                snapshot: projection,
+                events: [],
+                cursor,
+                replayed: false,
+              };
+            },
+          },
+        ],
+        NOW
+      );
+    const client = createAgentOsV1CanonicalPromptReferenceClient(transport);
+    const response = await client.read(canonicalEnvelope, snapshot, readPayload, NOW);
+
+    expect(response.payload.snapshot).toEqual(projection);
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toMatchObject({
+      protocolId: "execution.v1",
+      operation: "prompt.read",
+      envelope: { requestId: "request-0001" },
+      snapshot,
+    });
+    expect(JSON.stringify(seen[0])).not.toContain("baseUrl");
+    await expect(
+      dispatchAgentOsV1CanonicalPromptReference(
+        seen[0],
+        ownerCatalog,
+        { ...pin, runId: "run-cross-authority" },
+        [
+          {
+            protocolId: "execution.v1",
+            handlerVersion: snapshot.handlerVersion,
+            operation: "prompt.read",
+            handle() {
+              return response.payload;
+            },
+          },
+        ],
+        NOW
+      )
+    ).rejects.toMatchObject({ code: "PIN_DRIFT" });
+    await expect(
+      client.request(
+        canonicalEnvelope,
+        snapshot,
+        {
+          schemaVersion: "agent-os-canonical-prompt/v1",
+          operation: "prompt.read",
+          runId: "run-0001",
+          cursor: null,
+          limit: 16,
+          readAt: "2026-08-05T12:00:00.000Z",
+          baseUrl: "https://forbidden.example",
+        },
+        NOW
+      )
+    ).rejects.toThrow(AgentOsV1ContractError);
+  });
+
+  test("rejects cross-Run and leading-gap prompt responses at specialized boundaries", async () => {
+    const negotiated = acceptedSnapshot("execution.v1");
+    const pin = activePin(negotiated);
+    const ownerCatalog = {
+      revision: 1,
+      handlers: [
+        {
+          protocolId: "execution.v1",
+          handlerVersion: negotiated.handlerVersion,
+          lifecycle: "active",
+          operations: ["prompt.read"],
+        },
+      ],
+    };
+    const projection = createAgentOsV1CanonicalPromptSnapshot({
+      schemaVersion: "agent-os-canonical-prompt/v1",
+      runId: "run-0001",
+      attemptId: "attempt-0001",
+      instanceId: "instance-0001",
+      storeGeneration: 1,
+      streamEpoch: "stream-epoch:epoch-0001",
+      watermark: 3,
+      state: "running",
+      terminal: false,
+      updatedAt: "2026-08-05T12:00:00.000Z",
+    });
+    const requestCursor = createAgentOsV1CanonicalPromptCursor({
+      schemaVersion: "agent-os-canonical-prompt/v1",
+      runId: "run-0001",
+      streamEpoch: projection.streamEpoch,
+      sequence: 1,
+      watermark: projection.watermark,
+    });
+    const readPayload = {
+      schemaVersion: "agent-os-canonical-prompt/v1",
+      operation: "prompt.read",
+      runId: "run-0001",
+      cursor: requestCursor,
+      limit: 16,
+      readAt: "2026-08-05T12:00:00.000Z",
+    } as const;
+    const binding = createAgentOsV1CanonicalPromptSemanticBinding({
+      requestId: "request-0001",
+      expectedRevision: 4,
+      snapshot: negotiated,
+      payload: readPayload,
+    });
+    const envelope = {
+      ...authorityEnvelope(),
+      authorityEnvelopeRef: binding.authorityEnvelopeRef,
+    };
+    const event3 = createAgentOsV1CanonicalPromptEvent({
+      schemaVersion: "agent-os-canonical-prompt/v1",
+      eventId: "event-0003",
+      runId: "run-0001",
+      attemptId: "attempt-0001",
+      streamEpoch: projection.streamEpoch,
+      sequence: 3,
+      eventType: "provider.output",
+      payload: { text: "gap" },
+      createdAt: "2026-08-05T12:00:00.000Z",
+    });
+    const responseCursor = createAgentOsV1CanonicalPromptCursor({
+      schemaVersion: "agent-os-canonical-prompt/v1",
+      runId: "run-0001",
+      streamEpoch: projection.streamEpoch,
+      sequence: 3,
+      watermark: projection.watermark,
+    });
+    const gapResponse = {
+      schemaVersion: "agent-os-canonical-prompt/v1",
+      operation: "prompt.read",
+      disposition: "events",
+      snapshot: projection,
+      events: [event3],
+      cursor: responseCursor,
+      replayed: false,
+    } as const;
+    const foreignProjection = createAgentOsV1CanonicalPromptSnapshot({
+      schemaVersion: "agent-os-canonical-prompt/v1",
+      runId: "run-other",
+      attemptId: projection.attemptId,
+      instanceId: projection.instanceId,
+      storeGeneration: projection.storeGeneration,
+      streamEpoch: projection.streamEpoch,
+      watermark: projection.watermark,
+      state: projection.state,
+      terminal: projection.terminal,
+      updatedAt: projection.updatedAt,
+    });
+    const foreignCursor = createAgentOsV1CanonicalPromptCursor({
+      schemaVersion: "agent-os-canonical-prompt/v1",
+      runId: "run-other",
+      streamEpoch: foreignProjection.streamEpoch,
+      sequence: 0,
+      watermark: foreignProjection.watermark,
+    });
+    const foreignResponse = {
+      schemaVersion: "agent-os-canonical-prompt/v1",
+      operation: "prompt.read",
+      disposition: "events",
+      snapshot: foreignProjection,
+      events: [],
+      cursor: foreignCursor,
+      replayed: false,
+    } as const;
+    const clientFor = (payload: AgentOsV1CanonicalPromptResponse) =>
+      createAgentOsV1CanonicalPromptReferenceClient(async () => ({
+        protocolId: "execution.v1",
+        requestId: "request-0001",
+        status: "ok",
+        payload,
+      }));
+    const dispatchFor = (payload: AgentOsV1CanonicalPromptResponse) =>
+      dispatchAgentOsV1CanonicalPromptReference(
+        {
+          protocolId: "execution.v1",
+          operation: "prompt.read",
+          envelope,
+          snapshot: negotiated,
+          payload: readPayload,
+        },
+        ownerCatalog,
+        pin,
+        [
+          {
+            protocolId: "execution.v1",
+            handlerVersion: negotiated.handlerVersion,
+            operation: "prompt.read",
+            handle: () => payload,
+          },
+        ],
+        NOW
+      );
+
+    for (const response of [foreignResponse, gapResponse] as const) {
+      await expect(
+        clientFor(response).read(envelope, negotiated, readPayload, NOW)
+      ).rejects.toMatchObject({ code: "PIN_DRIFT" });
+      await expect(dispatchFor(response)).rejects.toMatchObject({ code: "PIN_DRIFT" });
+    }
+
+    const emptyPage = { ...gapResponse, events: [], cursor: requestCursor } as const;
+    await expect(
+      clientFor(emptyPage).read(envelope, negotiated, readPayload, NOW)
+    ).resolves.toMatchObject({ payload: { events: [], cursor: requestCursor } });
+
+    const regressedProjection = createAgentOsV1CanonicalPromptSnapshot({
+      schemaVersion: "agent-os-canonical-prompt/v1",
+      runId: "run-0001",
+      attemptId: "attempt-0001",
+      instanceId: "instance-0001",
+      storeGeneration: 1,
+      streamEpoch: projection.streamEpoch,
+      watermark: 2,
+      state: "running",
+      terminal: false,
+      updatedAt: "2026-08-05T12:00:00.000Z",
+    });
+    const event2 = createAgentOsV1CanonicalPromptEvent({
+      schemaVersion: "agent-os-canonical-prompt/v1",
+      eventId: "event-0002",
+      runId: "run-0001",
+      attemptId: "attempt-0001",
+      streamEpoch: projection.streamEpoch,
+      sequence: 2,
+      eventType: "provider.output",
+      payload: { text: "regressed" },
+      createdAt: "2026-08-05T12:00:00.000Z",
+    });
+    const regressedCursor = createAgentOsV1CanonicalPromptCursor({
+      schemaVersion: "agent-os-canonical-prompt/v1",
+      runId: "run-0001",
+      streamEpoch: projection.streamEpoch,
+      sequence: 2,
+      watermark: 2,
+    });
+    await expect(
+      clientFor({
+        ...gapResponse,
+        snapshot: regressedProjection,
+        events: [event2],
+        cursor: regressedCursor,
+      }).read(envelope, negotiated, readPayload, NOW)
+    ).rejects.toMatchObject({ code: "PIN_DRIFT" });
+
+    const nullRead = { ...readPayload, cursor: null } as const;
+    const nullBinding = createAgentOsV1CanonicalPromptSemanticBinding({
+      requestId: "request-0001",
+      expectedRevision: 4,
+      snapshot: negotiated,
+      payload: nullRead,
+    });
+    const nullEnvelope = {
+      ...authorityEnvelope(),
+      authorityEnvelopeRef: nullBinding.authorityEnvelopeRef,
+    };
+    await expect(
+      clientFor(gapResponse).read(nullEnvelope, negotiated, nullRead, NOW)
+    ).rejects.toMatchObject({ code: "PIN_DRIFT" });
+    const nullCursor = createAgentOsV1CanonicalPromptCursor({
+      schemaVersion: "agent-os-canonical-prompt/v1",
+      runId: "run-0001",
+      streamEpoch: projection.streamEpoch,
+      sequence: 0,
+      watermark: projection.watermark,
+    });
+    await expect(
+      clientFor({ ...gapResponse, events: [], cursor: nullCursor }).read(
+        nullEnvelope,
+        negotiated,
+        nullRead,
+        NOW
+      )
+    ).resolves.toMatchObject({ payload: { events: [], cursor: nullCursor } });
+
+    const retiredCursor = createAgentOsV1CanonicalPromptCursor({
+      schemaVersion: "agent-os-canonical-prompt/v1",
+      runId: "run-0001",
+      streamEpoch: "stream-epoch:retired",
+      sequence: 1,
+      watermark: 1,
+    });
+    const retiredRead = { ...readPayload, cursor: retiredCursor } as const;
+    const retiredBinding = createAgentOsV1CanonicalPromptSemanticBinding({
+      requestId: "request-0001",
+      expectedRevision: 4,
+      snapshot: negotiated,
+      payload: retiredRead,
+    });
+    const retiredEnvelope = {
+      ...authorityEnvelope(),
+      authorityEnvelopeRef: retiredBinding.authorityEnvelopeRef,
+    };
+    const rebuiltEvents = [1, 2, 3].map((sequence) =>
+      createAgentOsV1CanonicalPromptEvent({
+        schemaVersion: "agent-os-canonical-prompt/v1",
+        eventId: `event-rebuilt-${sequence}`,
+        runId: "run-0001",
+        attemptId: "attempt-0001",
+        streamEpoch: projection.streamEpoch,
+        sequence,
+        eventType: "provider.output",
+        payload: { text: `rebuilt-${sequence}` },
+        createdAt: "2026-08-05T12:00:00.000Z",
+      })
+    );
+    const snapshotRequired = {
+      ...gapResponse,
+      disposition: "snapshot-required",
+      events: rebuiltEvents,
+    } as const;
+    const snapshotClient = createAgentOsV1CanonicalPromptReferenceClient(async () => ({
+      protocolId: "execution.v1",
+      requestId: "request-0001",
+      status: "ok",
+      payload: snapshotRequired,
+    }));
+    await expect(
+      snapshotClient.read(retiredEnvelope, negotiated, retiredRead, NOW)
+    ).resolves.toMatchObject({ payload: { disposition: "snapshot-required" } });
+  });
 });
 
 const OK_CODECS = Object.freeze({
