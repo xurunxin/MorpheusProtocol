@@ -2,24 +2,46 @@ import type {
   AgentDefinition,
   AgentDeployment,
   AgentOsV1Contract,
+  CapabilityRequirement,
   CapabilityPackageDescriptor,
   CanonicalAgentOsV1Contract,
+  DeploymentBinding,
+  DeploymentDesiredState,
+  DigestRef,
   ExecutionGrant,
   ExecutionInstance,
+  ExecutionObservedState,
   HostProfile,
+  LeaseEpochRef,
+  LeaseBinding,
+  OpaqueRef,
+  RevocationGenerationRef,
+  RotationGenerationRef,
   RunSpec,
+  SessionGrant,
 } from "./agent-os-v1-types.js";
 
 export type {
   AgentDefinition,
   AgentDeployment,
   AgentOsV1Contract,
+  CapabilityRequirement,
   CapabilityPackageDescriptor,
   CanonicalAgentOsV1Contract,
+  DeploymentBinding,
+  DeploymentDesiredState,
+  DigestRef,
   ExecutionGrant,
   ExecutionInstance,
+  ExecutionObservedState,
   HostProfile,
+  LeaseEpochRef,
+  LeaseBinding,
+  OpaqueRef,
+  RevocationGenerationRef,
+  RotationGenerationRef,
   RunSpec,
+  SessionGrant,
 } from "./agent-os-v1-types.js";
 
 export const AGENT_OS_V1_SUPPORTED_FEATURES = Object.freeze([
@@ -31,6 +53,10 @@ const SUPPORTED_FEATURES = new Set<string>(AGENT_OS_V1_SUPPORTED_FEATURES);
 const DIGEST_PATTERN = /^sha256:[0-9a-f]{64}$/u;
 const SECRET_REF_PATTERN = /^secret-ref:[a-z0-9][a-z0-9._/-]{0,127}$/u;
 const IDENTIFIER_PATTERN = /^[a-z][a-z0-9._/-]{0,127}$/u;
+const OPAQUE_REF_PATTERN = /^[a-z][a-z0-9._-]{0,63}:[a-z][a-z0-9._-]{0,127}$/u;
+const LEASE_EPOCH_REF_PATTERN = /^lease-epoch:[a-z][a-z0-9._-]{0,127}$/u;
+const ROTATION_GENERATION_REF_PATTERN = /^rotation:[a-z][a-z0-9._-]{0,127}$/u;
+const REVOCATION_GENERATION_REF_PATTERN = /^revocation:[a-z][a-z0-9._-]{0,127}$/u;
 const RFC3339_MILLIS_PATTERN =
   /^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}Z$/u;
 
@@ -67,6 +93,68 @@ export const AGENT_OS_V1_CONTRACT_SCHEMA = deepFreeze({
     identifier: { type: "string", pattern: "^[a-z][a-z0-9._/-]{0,127}$" },
     version: { type: "string", pattern: "^1\\.[0-9]+$" },
     digest: { type: "string", pattern: "^sha256:[0-9a-f]{64}$" },
+    opaqueRef: { type: "string", pattern: "^[a-z][a-z0-9._-]{0,63}:[a-z][a-z0-9._-]{0,127}$" },
+    leaseEpochRef: {
+      type: "string",
+      pattern: "^lease-epoch:[a-z][a-z0-9._-]{0,127}$",
+    },
+    rotationGenerationRef: {
+      type: "string",
+      pattern: "^rotation:[a-z][a-z0-9._-]{0,127}$",
+    },
+    revocationGenerationRef: {
+      type: "string",
+      pattern: "^revocation:[a-z][a-z0-9._-]{0,127}$",
+    },
+    digestRef: {
+      type: "object",
+      additionalProperties: false,
+      required: ["ref", "digest"],
+      properties: {
+        ref: { $ref: "#/$defs/opaqueRef" },
+        digest: { $ref: "#/$defs/digest" },
+      },
+    },
+    capabilityRequirement: {
+      type: "object",
+      additionalProperties: false,
+      required: ["id", "packageDigest"],
+      properties: {
+        id: { $ref: "#/$defs/identifier" },
+        packageDigest: { $ref: "#/$defs/digest" },
+      },
+    },
+    capabilityRequirements: {
+      type: "array",
+      uniqueItems: true,
+      items: { $ref: "#/$defs/capabilityRequirement" },
+    },
+    deploymentBinding: {
+      type: "object",
+      additionalProperties: false,
+      required: ["bindingId", "ref", "digest"],
+      properties: {
+        bindingId: { $ref: "#/$defs/identifier" },
+        ref: { $ref: "#/$defs/opaqueRef" },
+        digest: { $ref: "#/$defs/digest" },
+      },
+    },
+    deploymentBindings: {
+      type: "array",
+      uniqueItems: true,
+      items: { $ref: "#/$defs/deploymentBinding" },
+    },
+    agentIdentity: {
+      type: "object",
+      additionalProperties: false,
+      required: ["tenantId", "workloadId"],
+      properties: {
+        tenantId: { $ref: "#/$defs/identifier" },
+        workloadId: { $ref: "#/$defs/identifier" },
+      },
+    },
+    desiredDeploymentState: { enum: ["active", "suspended"] },
+    observedInstanceState: { enum: ["pending", "running", "stopped", "failed"] },
     instant: {
       type: "string",
       format: "date-time",
@@ -83,6 +171,49 @@ export const AGENT_OS_V1_CONTRACT_SCHEMA = deepFreeze({
       minItems: 1,
       uniqueItems: true,
       items: { enum: AGENT_OS_V1_SUPPORTED_FEATURES },
+    },
+    sessionGrant: {
+      type: "object",
+      additionalProperties: false,
+      required: ["grantId", "principalId", "scope", "notBefore", "expiresAt"],
+      properties: {
+        grantId: { $ref: "#/$defs/identifier" },
+        principalId: { $ref: "#/$defs/identifier" },
+        scope: { $ref: "#/$defs/identifiers" },
+        notBefore: { $ref: "#/$defs/instant" },
+        expiresAt: { $ref: "#/$defs/instant" },
+      },
+    },
+    notApplicableLeaseBinding: {
+      type: "object",
+      additionalProperties: false,
+      required: ["kind"],
+      properties: { kind: { const: "not_applicable" } },
+    },
+    remoteLeaseBinding: {
+      type: "object",
+      additionalProperties: false,
+      required: ["kind", "leaseId", "epoch", "generation", "scope", "notBefore", "expiresAt"],
+      properties: {
+        kind: { const: "remote" },
+        leaseId: { $ref: "#/$defs/identifier" },
+        epoch: { $ref: "#/$defs/leaseEpochRef" },
+        generation: {
+          type: "integer",
+          minimum: 0,
+          maximum: 9007199254740991,
+          description: "Copied ExecutionInstance.generation pin; not a lease authority generation.",
+        },
+        scope: { $ref: "#/$defs/identifiers" },
+        notBefore: { $ref: "#/$defs/instant" },
+        expiresAt: { $ref: "#/$defs/instant" },
+      },
+    },
+    leaseBinding: {
+      oneOf: [
+        { $ref: "#/$defs/notApplicableLeaseBinding" },
+        { $ref: "#/$defs/remoteLeaseBinding" },
+      ],
     },
     capabilityPackage: {
       type: "object",
@@ -171,12 +302,25 @@ export const AGENT_OS_V1_CONTRACT_SCHEMA = deepFreeze({
     agentDefinition: {
       type: "object",
       additionalProperties: false,
-      required: ["agentId", "version", "capabilityPackage", "requestedScopes"],
+      required: [
+        "agentId",
+        "version",
+        "identity",
+        "capabilityPackage",
+        "requestedScopes",
+        "skills",
+        "tools",
+        "securityPolicy",
+      ],
       properties: {
         agentId: { $ref: "#/$defs/identifier" },
         version: { $ref: "#/$defs/version" },
+        identity: { $ref: "#/$defs/agentIdentity" },
         capabilityPackage: { $ref: "#/$defs/capabilityPackage" },
         requestedScopes: { $ref: "#/$defs/identifiers" },
+        skills: { $ref: "#/$defs/capabilityRequirements" },
+        tools: { $ref: "#/$defs/capabilityRequirements" },
+        securityPolicy: { $ref: "#/$defs/digestRef" },
       },
     },
     hostProfile: {
@@ -190,6 +334,11 @@ export const AGENT_OS_V1_CONTRACT_SCHEMA = deepFreeze({
         "authorityDomain",
         "capabilityCeiling",
         "supportedFeatures",
+        "providerCeiling",
+        "workspaceCeiling",
+        "storageCeiling",
+        "networkCeiling",
+        "lifecycleCeiling",
       ],
       properties: {
         hostId: { $ref: "#/$defs/identifier" },
@@ -199,12 +348,29 @@ export const AGENT_OS_V1_CONTRACT_SCHEMA = deepFreeze({
         authorityDomain: { $ref: "#/$defs/identifier" },
         capabilityCeiling: { $ref: "#/$defs/identifiers" },
         supportedFeatures: { $ref: "#/$defs/features" },
+        providerCeiling: { $ref: "#/$defs/digestRef" },
+        workspaceCeiling: { $ref: "#/$defs/digestRef" },
+        storageCeiling: { $ref: "#/$defs/digestRef" },
+        networkCeiling: { $ref: "#/$defs/digestRef" },
+        lifecycleCeiling: { $ref: "#/$defs/digestRef" },
       },
     },
     agentDeployment: {
       type: "object",
       additionalProperties: false,
-      required: ["deploymentId", "target", "agentId", "agentVersion", "hostId", "capabilityDigest"],
+      required: [
+        "deploymentId",
+        "target",
+        "agentId",
+        "agentVersion",
+        "hostId",
+        "capabilityDigest",
+        "desiredState",
+        "revision",
+        "desiredReplicas",
+        "placementPolicy",
+        "bindings",
+      ],
       properties: {
         deploymentId: { $ref: "#/$defs/identifier" },
         target: { enum: ["worker", "control", "personal"] },
@@ -212,28 +378,55 @@ export const AGENT_OS_V1_CONTRACT_SCHEMA = deepFreeze({
         agentVersion: { $ref: "#/$defs/version" },
         hostId: { $ref: "#/$defs/identifier" },
         capabilityDigest: { $ref: "#/$defs/digest" },
+        desiredState: { $ref: "#/$defs/desiredDeploymentState" },
+        revision: { $ref: "#/$defs/identifier" },
+        desiredReplicas: { type: "integer", minimum: 0, maximum: 9007199254740991 },
+        placementPolicy: { $ref: "#/$defs/digestRef" },
+        bindings: { $ref: "#/$defs/deploymentBindings" },
       },
     },
     executionInstance: {
       type: "object",
       additionalProperties: false,
-      required: ["instanceId", "deploymentId", "hostId", "generation"],
+      required: [
+        "instanceId",
+        "deploymentId",
+        "hostId",
+        "generation",
+        "deploymentRevision",
+        "replicaOrdinal",
+        "observedState",
+      ],
       properties: {
         instanceId: { $ref: "#/$defs/identifier" },
         deploymentId: { $ref: "#/$defs/identifier" },
         hostId: { $ref: "#/$defs/identifier" },
         generation: { type: "integer", minimum: 0, maximum: 9007199254740991 },
+        deploymentRevision: { $ref: "#/$defs/identifier" },
+        replicaOrdinal: { type: "integer", minimum: 0, maximum: 9007199254740991 },
+        observedState: { $ref: "#/$defs/observedInstanceState" },
       },
     },
     runSpec: {
       type: "object",
       additionalProperties: false,
-      required: ["runId", "deploymentId", "capabilityScopes", "requiredFeatures"],
+      required: [
+        "runId",
+        "deploymentId",
+        "capabilityScopes",
+        "requiredFeatures",
+        "definitionDigest",
+        "policyDigest",
+        "capabilityDigest",
+      ],
       properties: {
         runId: { $ref: "#/$defs/identifier" },
         deploymentId: { $ref: "#/$defs/identifier" },
         capabilityScopes: { $ref: "#/$defs/identifiers" },
         requiredFeatures: { $ref: "#/$defs/features" },
+        definitionDigest: { $ref: "#/$defs/digest" },
+        policyDigest: { $ref: "#/$defs/digest" },
+        capabilityDigest: { $ref: "#/$defs/digest" },
       },
     },
     executionGrant: {
@@ -248,10 +441,21 @@ export const AGENT_OS_V1_CONTRACT_SCHEMA = deepFreeze({
         "hostId",
         "deploymentId",
         "runId",
+        "tenantId",
+        "workloadId",
+        "attemptId",
+        "instanceId",
+        "definitionDigest",
+        "policyDigest",
         "capabilityDigest",
+        "keyId",
+        "rotationGeneration",
+        "revocationGeneration",
         "scope",
         "notBefore",
         "expiresAt",
+        "sessionGrant",
+        "leaseBinding",
       ],
       properties: {
         grantId: { $ref: "#/$defs/identifier" },
@@ -262,10 +466,21 @@ export const AGENT_OS_V1_CONTRACT_SCHEMA = deepFreeze({
         hostId: { $ref: "#/$defs/identifier" },
         deploymentId: { $ref: "#/$defs/identifier" },
         runId: { $ref: "#/$defs/identifier" },
+        tenantId: { $ref: "#/$defs/identifier" },
+        workloadId: { $ref: "#/$defs/identifier" },
+        attemptId: { $ref: "#/$defs/identifier" },
+        instanceId: { $ref: "#/$defs/identifier" },
+        definitionDigest: { $ref: "#/$defs/digest" },
+        policyDigest: { $ref: "#/$defs/digest" },
         capabilityDigest: { $ref: "#/$defs/digest" },
+        keyId: { $ref: "#/$defs/identifier" },
+        rotationGeneration: { $ref: "#/$defs/rotationGenerationRef" },
+        revocationGeneration: { $ref: "#/$defs/revocationGenerationRef" },
         scope: { $ref: "#/$defs/identifiers" },
         notBefore: { $ref: "#/$defs/instant" },
         expiresAt: { $ref: "#/$defs/instant" },
+        sessionGrant: { $ref: "#/$defs/sessionGrant" },
+        leaseBinding: { $ref: "#/$defs/leaseBinding" },
       },
     },
   },
@@ -362,15 +577,100 @@ export function createCapabilityPackageDescriptorDigest(
   return `sha256:${sha256Hex(canonicalJson(descriptor))}`;
 }
 
+/** 生成 AgentDefinition 的内容地址；RunSpec 必须固定此精确 public definition。 */
+export function createAgentDefinitionDigest(definition: AgentDefinition): string {
+  return `sha256:${sha256Hex(canonicalJson(agentDefinitionOf(definition)))}`;
+}
+
 function agentDefinitionOf(value: unknown): AgentDefinition {
   const input = record(value, "agentDefinition");
-  exact(input, ["agentId", "version", "capabilityPackage", "requestedScopes"], "agentDefinition");
+  exact(
+    input,
+    [
+      "agentId",
+      "version",
+      "identity",
+      "capabilityPackage",
+      "requestedScopes",
+      "skills",
+      "tools",
+      "securityPolicy",
+    ],
+    "agentDefinition"
+  );
+  const identity = record(input.identity, "agentDefinition.identity");
+  exact(identity, ["tenantId", "workloadId"], "agentDefinition.identity");
   return {
     agentId: identifier(input.agentId, "agentDefinition.agentId"),
     version: version(input.version, "agentDefinition.version"),
+    identity: {
+      tenantId: identifier(identity.tenantId, "agentDefinition.identity.tenantId"),
+      workloadId: identifier(identity.workloadId, "agentDefinition.identity.workloadId"),
+    },
     capabilityPackage: capabilityPackageOf(input.capabilityPackage),
     requestedScopes: scopes(input.requestedScopes, "agentDefinition.requestedScopes"),
+    skills: capabilityRequirements(input.skills, "agentDefinition.skills"),
+    tools: capabilityRequirements(input.tools, "agentDefinition.tools"),
+    securityPolicy: digestRefOf(input.securityPolicy, "agentDefinition.securityPolicy"),
   };
+}
+
+function digestRefOf(value: unknown, label: string): DigestRef {
+  const input = record(value, label);
+  exact(input, ["ref", "digest"], label);
+  return {
+    ref: opaqueRef(input.ref, `${label}.ref`),
+    digest: digest(input.digest, `${label}.digest`),
+  };
+}
+
+function capabilityRequirements(value: unknown, label: string): readonly CapabilityRequirement[] {
+  const requirements: CapabilityRequirement[] = [];
+  for (const [index, item] of arrayValues(value, label).entries()) {
+    const itemLabel = `${label}[${index}]`;
+    const input = record(item, itemLabel);
+    exact(input, ["id", "packageDigest"], itemLabel);
+    requirements.push({
+      id: identifier(input.id, `${itemLabel}.id`),
+      packageDigest: digest(input.packageDigest, `${itemLabel}.packageDigest`),
+    });
+  }
+  requirements.sort(compareById);
+  if (requirements.some((requirement, index) => requirement.id === requirements[index - 1]?.id))
+    fail("INVALID_VALUE", `${label} must not contain duplicate ids`);
+  return requirements;
+}
+
+function deploymentBindings(value: unknown, label: string): readonly DeploymentBinding[] {
+  const bindings: DeploymentBinding[] = [];
+  for (const [index, item] of arrayValues(value, label).entries()) {
+    const itemLabel = `${label}[${index}]`;
+    const input = record(item, itemLabel);
+    exact(input, ["bindingId", "ref", "digest"], itemLabel);
+    bindings.push({
+      bindingId: identifier(input.bindingId, `${itemLabel}.bindingId`),
+      ref: opaqueRef(input.ref, `${itemLabel}.ref`),
+      digest: digest(input.digest, `${itemLabel}.digest`),
+    });
+  }
+  bindings.sort(compareByBindingId);
+  if (bindings.some((binding, index) => binding.bindingId === bindings[index - 1]?.bindingId))
+    fail("INVALID_VALUE", `${label} must not contain duplicate bindingIds`);
+  return bindings;
+}
+
+function compareById(
+  left: Pick<CapabilityRequirement, "id">,
+  right: Pick<CapabilityRequirement, "id">
+): number {
+  return left.id < right.id ? -1 : left.id > right.id ? 1 : 0;
+}
+
+function compareByBindingId(
+  left: Pick<DeploymentBinding, "bindingId">,
+  right: Pick<DeploymentBinding, "bindingId">
+): number {
+  return left.bindingId < right.bindingId ? -1 : left.bindingId > right.bindingId ? 1 : 0;
 }
 
 function capabilityPackageOf(value: unknown): CapabilityPackageDescriptor {
@@ -488,6 +788,11 @@ function hostProfileOf(value: unknown): HostProfile {
       "authorityDomain",
       "capabilityCeiling",
       "supportedFeatures",
+      "providerCeiling",
+      "workspaceCeiling",
+      "storageCeiling",
+      "networkCeiling",
+      "lifecycleCeiling",
     ],
     "hostProfile"
   );
@@ -505,6 +810,11 @@ function hostProfileOf(value: unknown): HostProfile {
     authorityDomain: identifier(input.authorityDomain, "hostProfile.authorityDomain"),
     capabilityCeiling: scopes(input.capabilityCeiling, "hostProfile.capabilityCeiling"),
     supportedFeatures: featuresOf(input.supportedFeatures, "hostProfile.supportedFeatures"),
+    providerCeiling: digestRefOf(input.providerCeiling, "hostProfile.providerCeiling"),
+    workspaceCeiling: digestRefOf(input.workspaceCeiling, "hostProfile.workspaceCeiling"),
+    storageCeiling: digestRefOf(input.storageCeiling, "hostProfile.storageCeiling"),
+    networkCeiling: digestRefOf(input.networkCeiling, "hostProfile.networkCeiling"),
+    lifecycleCeiling: digestRefOf(input.lifecycleCeiling, "hostProfile.lifecycleCeiling"),
   };
 }
 
@@ -512,7 +822,19 @@ function agentDeploymentOf(value: unknown): AgentDeployment {
   const input = record(value, "agentDeployment");
   exact(
     input,
-    ["deploymentId", "target", "agentId", "agentVersion", "hostId", "capabilityDigest"],
+    [
+      "deploymentId",
+      "target",
+      "agentId",
+      "agentVersion",
+      "hostId",
+      "capabilityDigest",
+      "desiredState",
+      "revision",
+      "desiredReplicas",
+      "placementPolicy",
+      "bindings",
+    ],
     "agentDeployment"
   );
   if (input.target !== "worker" && input.target !== "control" && input.target !== "personal")
@@ -524,28 +846,66 @@ function agentDeploymentOf(value: unknown): AgentDeployment {
     agentVersion: version(input.agentVersion, "agentDeployment.agentVersion"),
     hostId: identifier(input.hostId, "agentDeployment.hostId"),
     capabilityDigest: digest(input.capabilityDigest, "agentDeployment.capabilityDigest"),
+    desiredState: deploymentDesiredState(input.desiredState, "agentDeployment.desiredState"),
+    revision: identifier(input.revision, "agentDeployment.revision"),
+    desiredReplicas: nonNegativeInteger(input.desiredReplicas, "agentDeployment.desiredReplicas"),
+    placementPolicy: digestRefOf(input.placementPolicy, "agentDeployment.placementPolicy"),
+    bindings: deploymentBindings(input.bindings, "agentDeployment.bindings"),
   };
 }
 
 function executionInstanceOf(value: unknown): ExecutionInstance {
   const input = record(value, "executionInstance");
-  exact(input, ["instanceId", "deploymentId", "hostId", "generation"], "executionInstance");
+  exact(
+    input,
+    [
+      "instanceId",
+      "deploymentId",
+      "hostId",
+      "generation",
+      "deploymentRevision",
+      "replicaOrdinal",
+      "observedState",
+    ],
+    "executionInstance"
+  );
   return {
     instanceId: identifier(input.instanceId, "executionInstance.instanceId"),
     deploymentId: identifier(input.deploymentId, "executionInstance.deploymentId"),
     hostId: identifier(input.hostId, "executionInstance.hostId"),
     generation: nonNegativeInteger(input.generation, "executionInstance.generation"),
+    deploymentRevision: identifier(
+      input.deploymentRevision,
+      "executionInstance.deploymentRevision"
+    ),
+    replicaOrdinal: nonNegativeInteger(input.replicaOrdinal, "executionInstance.replicaOrdinal"),
+    observedState: executionObservedState(input.observedState, "executionInstance.observedState"),
   };
 }
 
 function runSpecOf(value: unknown): RunSpec {
   const input = record(value, "runSpec");
-  exact(input, ["runId", "deploymentId", "capabilityScopes", "requiredFeatures"], "runSpec");
+  exact(
+    input,
+    [
+      "runId",
+      "deploymentId",
+      "capabilityScopes",
+      "requiredFeatures",
+      "definitionDigest",
+      "policyDigest",
+      "capabilityDigest",
+    ],
+    "runSpec"
+  );
   return {
     runId: identifier(input.runId, "runSpec.runId"),
     deploymentId: identifier(input.deploymentId, "runSpec.deploymentId"),
     capabilityScopes: scopes(input.capabilityScopes, "runSpec.capabilityScopes"),
     requiredFeatures: featuresOf(input.requiredFeatures, "runSpec.requiredFeatures"),
+    definitionDigest: digest(input.definitionDigest, "runSpec.definitionDigest"),
+    policyDigest: digest(input.policyDigest, "runSpec.policyDigest"),
+    capabilityDigest: digest(input.capabilityDigest, "runSpec.capabilityDigest"),
   };
 }
 
@@ -562,10 +922,21 @@ function executionGrantOf(value: unknown): ExecutionGrant {
       "hostId",
       "deploymentId",
       "runId",
+      "tenantId",
+      "workloadId",
+      "attemptId",
+      "instanceId",
+      "definitionDigest",
+      "policyDigest",
       "capabilityDigest",
+      "keyId",
+      "rotationGeneration",
+      "revocationGeneration",
       "scope",
       "notBefore",
       "expiresAt",
+      "sessionGrant",
+      "leaseBinding",
     ],
     "executionGrant"
   );
@@ -583,8 +954,72 @@ function executionGrantOf(value: unknown): ExecutionGrant {
     hostId: identifier(input.hostId, "executionGrant.hostId"),
     deploymentId: identifier(input.deploymentId, "executionGrant.deploymentId"),
     runId: identifier(input.runId, "executionGrant.runId"),
+    tenantId: identifier(input.tenantId, "executionGrant.tenantId"),
+    workloadId: identifier(input.workloadId, "executionGrant.workloadId"),
+    attemptId: identifier(input.attemptId, "executionGrant.attemptId"),
+    instanceId: identifier(input.instanceId, "executionGrant.instanceId"),
+    definitionDigest: digest(input.definitionDigest, "executionGrant.definitionDigest"),
+    policyDigest: digest(input.policyDigest, "executionGrant.policyDigest"),
     capabilityDigest: digest(input.capabilityDigest, "executionGrant.capabilityDigest"),
+    keyId: identifier(input.keyId, "executionGrant.keyId"),
+    rotationGeneration: rotationGenerationRef(
+      input.rotationGeneration,
+      "executionGrant.rotationGeneration"
+    ),
+    revocationGeneration: revocationGenerationRef(
+      input.revocationGeneration,
+      "executionGrant.revocationGeneration"
+    ),
     scope: scopes(input.scope, "executionGrant.scope"),
+    notBefore,
+    expiresAt,
+    sessionGrant: sessionGrantOf(input.sessionGrant),
+    leaseBinding: leaseBindingOf(input.leaseBinding),
+  };
+}
+
+function sessionGrantOf(value: unknown): SessionGrant {
+  const input = record(value, "executionGrant.sessionGrant");
+  exact(
+    input,
+    ["grantId", "principalId", "scope", "notBefore", "expiresAt"],
+    "executionGrant.sessionGrant"
+  );
+  const notBefore = instant(input.notBefore, "executionGrant.sessionGrant.notBefore");
+  const expiresAt = instant(input.expiresAt, "executionGrant.sessionGrant.expiresAt");
+  if (notBefore >= expiresAt)
+    fail("INVALID_VALUE", "executionGrant.sessionGrant must expire after notBefore");
+  return {
+    grantId: identifier(input.grantId, "executionGrant.sessionGrant.grantId"),
+    principalId: identifier(input.principalId, "executionGrant.sessionGrant.principalId"),
+    scope: scopes(input.scope, "executionGrant.sessionGrant.scope"),
+    notBefore,
+    expiresAt,
+  };
+}
+
+function leaseBindingOf(value: unknown): LeaseBinding {
+  const input = record(value, "executionGrant.leaseBinding");
+  if (input.kind === "not_applicable") {
+    exact(input, ["kind"], "executionGrant.leaseBinding");
+    return { kind: "not_applicable" };
+  }
+  if (input.kind !== "remote") fail("INVALID_VALUE", "executionGrant.leaseBinding.kind is invalid");
+  exact(
+    input,
+    ["kind", "leaseId", "epoch", "generation", "scope", "notBefore", "expiresAt"],
+    "executionGrant.leaseBinding"
+  );
+  const notBefore = instant(input.notBefore, "executionGrant.leaseBinding.notBefore");
+  const expiresAt = instant(input.expiresAt, "executionGrant.leaseBinding.expiresAt");
+  if (notBefore >= expiresAt)
+    fail("INVALID_VALUE", "executionGrant.leaseBinding must expire after notBefore");
+  return {
+    kind: "remote",
+    leaseId: identifier(input.leaseId, "executionGrant.leaseBinding.leaseId"),
+    epoch: leaseEpochRef(input.epoch, "executionGrant.leaseBinding.epoch"),
+    generation: nonNegativeInteger(input.generation, "executionGrant.leaseBinding.generation"),
+    scope: scopes(input.scope, "executionGrant.leaseBinding.scope"),
     notBefore,
     expiresAt,
   };
@@ -606,6 +1041,12 @@ function validateRelationships(value: Omit<AgentOsV1Contract, "schemaVersion">):
     fail("DRIFT_DETECTED", "deployment does not pin the agent definition");
   if (agentDeployment.capabilityDigest !== agentDefinition.capabilityPackage.digest)
     fail("DRIFT_DETECTED", "deployment capability digest drifted");
+  if (runSpec.definitionDigest !== createAgentDefinitionDigest(agentDefinition))
+    fail("DRIFT_DETECTED", "run definition digest drifted");
+  if (runSpec.policyDigest !== agentDefinition.securityPolicy.digest)
+    fail("DRIFT_DETECTED", "run policy digest drifted");
+  if (runSpec.capabilityDigest !== agentDefinition.capabilityPackage.digest)
+    fail("DRIFT_DETECTED", "run capability digest drifted");
   if (
     agentDeployment.hostId !== hostProfile.hostId ||
     executionInstance.hostId !== hostProfile.hostId
@@ -616,17 +1057,27 @@ function validateRelationships(value: Omit<AgentOsV1Contract, "schemaVersion">):
     runSpec.deploymentId !== agentDeployment.deploymentId
   )
     fail("DRIFT_DETECTED", "instance and run must pin the deployment");
+  if (executionInstance.deploymentRevision !== agentDeployment.revision)
+    fail("DRIFT_DETECTED", "instance must pin the deployment revision");
   if (
     executionGrant.hostId !== hostProfile.hostId ||
     executionGrant.deploymentId !== agentDeployment.deploymentId ||
-    executionGrant.runId !== runSpec.runId
+    executionGrant.runId !== runSpec.runId ||
+    executionGrant.instanceId !== executionInstance.instanceId
   )
     fail("DRIFT_DETECTED", "grant does not pin the execution tuple");
   if (
-    executionGrant.capabilityDigest !== agentDefinition.capabilityPackage.digest ||
+    executionGrant.tenantId !== agentDefinition.identity.tenantId ||
+    executionGrant.workloadId !== agentDefinition.identity.workloadId ||
     executionGrant.authorityDomain !== hostProfile.authorityDomain
   )
     fail("DRIFT_DETECTED", "grant identity pins drifted");
+  if (
+    executionGrant.definitionDigest !== runSpec.definitionDigest ||
+    executionGrant.policyDigest !== runSpec.policyDigest ||
+    executionGrant.capabilityDigest !== runSpec.capabilityDigest
+  )
+    fail("DRIFT_DETECTED", "grant digest pins drifted");
   if (agentDeployment.target !== hostProfile.role)
     fail("INVALID_VALUE", "deployment target must equal host role");
   if (hostProfile.hostKind === "worker") {
@@ -646,20 +1097,57 @@ function validateRelationships(value: Omit<AgentOsV1Contract, "schemaVersion">):
     )
       fail("INVALID_VALUE", "Personal grant kind must match management mode");
   }
+  if (hostProfile.managementMode === "standalone") {
+    if (executionGrant.leaseBinding.kind !== "not_applicable")
+      fail("INVALID_VALUE", "standalone local grants require a not_applicable lease binding");
+  } else {
+    if (executionGrant.leaseBinding.kind !== "remote")
+      fail("INVALID_VALUE", "remote and delegated grants require a remote lease binding");
+    if (executionGrant.leaseBinding.generation !== executionInstance.generation)
+      fail(
+        "DRIFT_DETECTED",
+        "lease binding generation must equal the copied execution instance generation"
+      );
+  }
   if (executionGrant.audience.length !== 1 || executionGrant.audience[0] !== hostProfile.hostId)
     fail("GRANT_EXPANSION", "grant audience must narrow to exactly one execution host");
   narrow(executionGrant.scope, runSpec.capabilityScopes, "grant scope exceeds the run scope");
+  narrow(
+    executionGrant.scope,
+    executionGrant.sessionGrant.scope,
+    "grant scope exceeds the session grant scope"
+  );
+  narrowWindow(
+    executionGrant.notBefore,
+    executionGrant.expiresAt,
+    executionGrant.sessionGrant.notBefore,
+    executionGrant.sessionGrant.expiresAt,
+    "grant validity exceeds the session grant validity"
+  );
+  if (executionGrant.leaseBinding.kind === "remote") {
+    narrow(
+      executionGrant.scope,
+      executionGrant.leaseBinding.scope,
+      "grant scope exceeds the remote lease scope"
+    );
+    narrowWindow(
+      executionGrant.notBefore,
+      executionGrant.expiresAt,
+      executionGrant.leaseBinding.notBefore,
+      executionGrant.leaseBinding.expiresAt,
+      "grant validity exceeds the remote lease validity"
+    );
+  }
   narrow(
     runSpec.capabilityScopes,
     agentDefinition.requestedScopes,
     "run scope exceeds the agent definition"
   );
-  if (hostProfile.hostKind === "personal")
-    narrow(
-      executionGrant.scope,
-      hostProfile.capabilityCeiling,
-      "Personal grant exceeds local capability ceiling"
-    );
+  narrow(
+    executionGrant.scope,
+    hostProfile.capabilityCeiling,
+    "grant exceeds the host capability ceiling"
+  );
   narrow(runSpec.requiredFeatures, value.features, "run requires unavailable contract features");
   narrow(
     runSpec.requiredFeatures,
@@ -682,6 +1170,17 @@ function withoutDigest(
 
 function narrow(actual: readonly string[], ceiling: readonly string[], message: string): void {
   if (actual.some((entry) => !ceiling.includes(entry))) fail("GRANT_EXPANSION", message);
+}
+
+function narrowWindow(
+  notBefore: string,
+  expiresAt: string,
+  ceilingNotBefore: string,
+  ceilingExpiresAt: string,
+  message: string
+): void {
+  if (notBefore < ceilingNotBefore || expiresAt > ceilingExpiresAt)
+    fail("GRANT_EXPANSION", message);
 }
 
 function record(value: unknown, label: string): Record<string, unknown> {
@@ -769,9 +1268,44 @@ function identifier(value: unknown, label: string): string {
   return value;
 }
 
+function opaqueRef(value: unknown, label: string): OpaqueRef {
+  if (typeof value !== "string" || !OPAQUE_REF_PATTERN.test(value))
+    fail("INVALID_VALUE", `${label} must be a namespace-qualified opaque ref`);
+  return value as OpaqueRef;
+}
+
+function leaseEpochRef(value: unknown, label: string): LeaseEpochRef {
+  if (typeof value !== "string" || !LEASE_EPOCH_REF_PATTERN.test(value))
+    fail("INVALID_VALUE", `${label} must be a lease epoch opaque ref`);
+  return value as LeaseEpochRef;
+}
+
+function rotationGenerationRef(value: unknown, label: string): RotationGenerationRef {
+  if (typeof value !== "string" || !ROTATION_GENERATION_REF_PATTERN.test(value))
+    fail("INVALID_VALUE", `${label} must be a rotation opaque ref`);
+  return value as RotationGenerationRef;
+}
+
+function revocationGenerationRef(value: unknown, label: string): RevocationGenerationRef {
+  if (typeof value !== "string" || !REVOCATION_GENERATION_REF_PATTERN.test(value))
+    fail("INVALID_VALUE", `${label} must be a revocation opaque ref`);
+  return value as RevocationGenerationRef;
+}
+
 function version(value: unknown, label: string): string {
   if (typeof value !== "string" || !/^1\.[0-9]+$/u.test(value))
     fail("UNSUPPORTED_VERSION", `${label} is unsupported`);
+  return value;
+}
+
+function deploymentDesiredState(value: unknown, label: string): DeploymentDesiredState {
+  if (value !== "active" && value !== "suspended") fail("INVALID_VALUE", `${label} is invalid`);
+  return value;
+}
+
+function executionObservedState(value: unknown, label: string): ExecutionObservedState {
+  if (value !== "pending" && value !== "running" && value !== "stopped" && value !== "failed")
+    fail("INVALID_VALUE", `${label} is invalid`);
   return value;
 }
 
