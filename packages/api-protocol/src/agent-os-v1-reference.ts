@@ -1,8 +1,11 @@
 import {
   AGENT_OS_V1_PROTOCOL_REGISTRY,
   AgentOsV1ContractError,
+  assertAgentOsV1CanonicalPromptSemanticBinding,
   parseAgentOsV1ActiveRunPin,
   parseAgentOsV1ActiveRunPins,
+  parseAgentOsV1CanonicalPromptRequest,
+  parseAgentOsV1CanonicalPromptResponse,
   parseAgentOsV1HandlerCatalogSnapshot,
   parseAgentOsV1HandlerTransitionCommand,
   parseAgentOsV1HandshakeOffer,
@@ -12,6 +15,11 @@ import {
 } from "./agent-os-v1-contract.js";
 import type {
   AgentOsV1ActiveRunPin,
+  AgentOsV1CanonicalPromptCancelRequest,
+  AgentOsV1CanonicalPromptReadRequest,
+  AgentOsV1CanonicalPromptRequest,
+  AgentOsV1CanonicalPromptResponse,
+  AgentOsV1CanonicalPromptStartRequest,
   AgentOsV1HandlerCatalogEntry,
   AgentOsV1HandlerCatalogSnapshot,
   AgentOsV1HandshakeOffer,
@@ -149,6 +157,187 @@ export function createAgentOsV1ReferenceClient<
       );
     },
   });
+}
+
+export type AgentOsV1CanonicalPromptTransport =
+  AgentOsV1ReferenceTransport<AgentOsV1CanonicalPromptRequest>;
+
+export interface AgentOsV1CanonicalPromptReferenceClient {
+  readonly protocolId: "execution.v1";
+  readonly request: (
+    envelope: unknown,
+    snapshot: unknown,
+    payload: unknown,
+    nowEpochMs: number
+  ) => Promise<Readonly<AgentOsV1ReferenceResponse<AgentOsV1CanonicalPromptResponse>>>;
+  readonly start: (
+    envelope: unknown,
+    snapshot: unknown,
+    payload: AgentOsV1CanonicalPromptStartRequest,
+    nowEpochMs: number
+  ) => Promise<Readonly<AgentOsV1ReferenceResponse<AgentOsV1CanonicalPromptResponse>>>;
+  readonly read: (
+    envelope: unknown,
+    snapshot: unknown,
+    payload: AgentOsV1CanonicalPromptReadRequest,
+    nowEpochMs: number
+  ) => Promise<Readonly<AgentOsV1ReferenceResponse<AgentOsV1CanonicalPromptResponse>>>;
+  readonly cancel: (
+    envelope: unknown,
+    snapshot: unknown,
+    payload: AgentOsV1CanonicalPromptCancelRequest,
+    nowEpochMs: number
+  ) => Promise<Readonly<AgentOsV1ReferenceResponse<AgentOsV1CanonicalPromptResponse>>>;
+}
+
+const CANONICAL_PROMPT_CODECS = Object.freeze({
+  request: parseAgentOsV1CanonicalPromptRequest,
+  response: parseAgentOsV1CanonicalPromptResponse,
+});
+
+/** execution.v1 prompt client：只有注入 transport，没有 URL、route、credential 或连接 ownership。 */
+export function createAgentOsV1CanonicalPromptReferenceClient(
+  transport: AgentOsV1CanonicalPromptTransport
+): AgentOsV1CanonicalPromptReferenceClient {
+  const client = createAgentOsV1ReferenceClient("execution.v1", transport, CANONICAL_PROMPT_CODECS);
+  const request = async (
+    envelope: unknown,
+    snapshot: unknown,
+    payloadInput: unknown,
+    nowEpochMs: number
+  ) => {
+    const payload = assertAgentOsV1CanonicalPromptSemanticBinding(
+      envelope,
+      snapshot,
+      payloadInput
+    ).payload;
+    const response = await client.request(
+      payload.operation,
+      envelope,
+      snapshot,
+      payload,
+      nowEpochMs
+    );
+    if (response.payload.operation !== payload.operation)
+      throw new AgentOsV1ReferenceError(
+        "PIN_DRIFT",
+        "canonical prompt response operation differs from the request"
+      );
+    assertCanonicalPromptResponseCorrelation(payload, response.payload);
+    return response;
+  };
+  return deepFreeze({
+    protocolId: "execution.v1" as const,
+    request,
+    start: request,
+    read: request,
+    cancel: request,
+  });
+}
+
+export interface AgentOsV1CanonicalPromptReferenceHandler {
+  readonly protocolId: "execution.v1";
+  readonly handlerVersion: string;
+  readonly operation: "prompt.start" | "prompt.read" | "prompt.cancel";
+  readonly handle: (
+    request: Readonly<AgentOsV1ReferenceRequest<AgentOsV1CanonicalPromptRequest>>
+  ) => Promise<AgentOsV1CanonicalPromptResponse> | AgentOsV1CanonicalPromptResponse;
+}
+
+/** specialized dispatch 把 envelope 与 negotiated pin 一并交给 Worker handler 做 authority binding。 */
+export async function dispatchAgentOsV1CanonicalPromptReference(
+  requestInput: unknown,
+  catalogInput: unknown,
+  activePinInput: unknown,
+  handlersInput: unknown,
+  nowEpochMs: number
+): Promise<Readonly<AgentOsV1ReferenceResponse<AgentOsV1CanonicalPromptResponse>>> {
+  const request = parseAgentOsV1ReferenceRequest(
+    requestInput,
+    parseAgentOsV1CanonicalPromptRequest
+  );
+  assertAgentOsV1CanonicalPromptSemanticBinding(
+    request.envelope,
+    request.snapshot,
+    request.payload
+  );
+  if (request.protocolId !== "execution.v1" || request.operation !== request.payload.operation)
+    throw new AgentOsV1ReferenceError(
+      "PIN_DRIFT",
+      "canonical prompt request must use its matching execution.v1 operation"
+    );
+  const activePin = parseAgentOsV1ActiveRunPin(activePinInput);
+  if (activePin.runId !== request.payload.runId)
+    throw new AgentOsV1ReferenceError(
+      "PIN_DRIFT",
+      "canonical prompt request belongs to another active Run pin"
+    );
+  const handlers = parseCanonicalPromptHandlers(handlersInput);
+  const wrapped = handlers.map((handler) => ({
+    protocolId: handler.protocolId,
+    handlerVersion: handler.handlerVersion,
+    operation: handler.operation,
+    handle: () => handler.handle(request),
+  }));
+  const response = await dispatchAgentOsV1Reference(
+    request,
+    catalogInput,
+    activePin,
+    wrapped,
+    nowEpochMs,
+    CANONICAL_PROMPT_CODECS
+  );
+  if (response.payload.operation !== request.operation)
+    throw new AgentOsV1ReferenceError(
+      "PIN_DRIFT",
+      "canonical prompt handler returned another operation"
+    );
+  assertCanonicalPromptResponseCorrelation(request.payload, response.payload);
+  return response;
+}
+
+function assertCanonicalPromptResponseCorrelation(
+  request: Readonly<AgentOsV1CanonicalPromptRequest>,
+  response: Readonly<AgentOsV1CanonicalPromptResponse>
+): void {
+  if (response.snapshot.runId !== request.runId)
+    throw new AgentOsV1ReferenceError(
+      "PIN_DRIFT",
+      "canonical prompt response belongs to another Run"
+    );
+  if (request.operation !== "prompt.read") return;
+  if (request.cursor === null) {
+    const firstEvent = response.events[0];
+    if (
+      (firstEvent !== undefined && firstEvent.sequence !== 1) ||
+      (firstEvent === undefined && response.cursor.sequence !== 0)
+    )
+      throw new AgentOsV1ReferenceError(
+        "PIN_DRIFT",
+        "canonical prompt response does not begin at the null cursor"
+      );
+    return;
+  }
+  if (response.disposition === "snapshot-required") return;
+  if (response.snapshot.streamEpoch !== request.cursor.streamEpoch)
+    throw new AgentOsV1ReferenceError(
+      "PIN_DRIFT",
+      "canonical prompt events response changed the requested stream epoch"
+    );
+  if (response.snapshot.watermark < request.cursor.watermark)
+    throw new AgentOsV1ReferenceError(
+      "PIN_DRIFT",
+      "canonical prompt response watermark regressed behind the requested cursor"
+    );
+  const firstEvent = response.events[0];
+  if (
+    (firstEvent !== undefined && firstEvent.sequence !== request.cursor.sequence + 1) ||
+    (firstEvent === undefined && response.cursor.sequence !== request.cursor.sequence)
+  )
+    throw new AgentOsV1ReferenceError(
+      "PIN_DRIFT",
+      "canonical prompt events response does not continue the requested cursor"
+    );
 }
 
 export interface AgentOsV1ReferenceHandler<TRequest, TResponse> {
@@ -347,6 +536,56 @@ function parseOwnerHandlers<TRequest, TResponse>(
   );
   if (new Set(identities).size !== identities.length)
     throw new AgentOsV1ReferenceError("INVALID_INPUT", "owner handlers contain duplicate keys");
+  return deepFreeze(handlers);
+}
+
+function parseCanonicalPromptHandlers(
+  input: unknown
+): readonly AgentOsV1CanonicalPromptReferenceHandler[] {
+  const handlers = strictArrayValues(input, "canonical prompt handlers").map((entry) => {
+    const value = strictRecord(entry, "canonical prompt handler");
+    exactKeys(
+      value,
+      ["protocolId", "handlerVersion", "operation", "handle"],
+      "canonical prompt handler"
+    );
+    if (value.protocolId !== "execution.v1")
+      throw new AgentOsV1ReferenceError(
+        "INVALID_INPUT",
+        "canonical prompt handler must use execution.v1"
+      );
+    if (
+      value.operation !== "prompt.start" &&
+      value.operation !== "prompt.read" &&
+      value.operation !== "prompt.cancel"
+    )
+      throw new AgentOsV1ReferenceError(
+        "INVALID_INPUT",
+        "canonical prompt handler operation is invalid"
+      );
+    if (typeof value.handle !== "function")
+      throw new AgentOsV1ReferenceError(
+        "INVALID_INPUT",
+        "canonical prompt handler handle must be a function"
+      );
+    return Object.freeze({
+      protocolId: "execution.v1" as const,
+      handlerVersion: identifierValue(
+        value.handlerVersion,
+        "canonical prompt handler handlerVersion"
+      ),
+      operation: value.operation,
+      handle: value.handle as AgentOsV1CanonicalPromptReferenceHandler["handle"],
+    });
+  });
+  const identities = handlers.map(
+    (handler) => `${handler.protocolId}:${handler.handlerVersion}:${handler.operation}`
+  );
+  if (new Set(identities).size !== identities.length)
+    throw new AgentOsV1ReferenceError(
+      "INVALID_INPUT",
+      "canonical prompt handlers contain duplicate keys"
+    );
   return deepFreeze(handlers);
 }
 

@@ -4,6 +4,19 @@ import type {
   AgentOsV1Contract,
   AgentOsV1ActiveRunPin,
   AgentOsV1AuthorityRequestEnvelope,
+  AgentOsV1CanonicalPromptStartRequest,
+  AgentOsV1CanonicalPromptCursor,
+  AgentOsV1CanonicalPromptCancelRequest,
+  AgentOsV1CanonicalPromptEvent,
+  AgentOsV1CanonicalPromptEventPayload,
+  AgentOsV1CanonicalPromptEventType,
+  AgentOsV1CanonicalPromptInput,
+  AgentOsV1CanonicalPromptSnapshot,
+  AgentOsV1CanonicalPromptState,
+  AgentOsV1CanonicalPromptStreamEpoch,
+  AgentOsV1CanonicalPromptReadRequest,
+  AgentOsV1CanonicalPromptRequest,
+  AgentOsV1CanonicalPromptResponse,
   AgentOsV1HandlerCatalogEntry,
   AgentOsV1HandlerCatalogSnapshot,
   AgentOsV1HandlerTransitionCommand,
@@ -49,6 +62,19 @@ export type {
   AgentOsV1Contract,
   AgentOsV1ActiveRunPin,
   AgentOsV1AuthorityRequestEnvelope,
+  AgentOsV1CanonicalPromptStartRequest,
+  AgentOsV1CanonicalPromptCursor,
+  AgentOsV1CanonicalPromptCancelRequest,
+  AgentOsV1CanonicalPromptEvent,
+  AgentOsV1CanonicalPromptEventPayload,
+  AgentOsV1CanonicalPromptEventType,
+  AgentOsV1CanonicalPromptInput,
+  AgentOsV1CanonicalPromptSnapshot,
+  AgentOsV1CanonicalPromptState,
+  AgentOsV1CanonicalPromptStreamEpoch,
+  AgentOsV1CanonicalPromptReadRequest,
+  AgentOsV1CanonicalPromptRequest,
+  AgentOsV1CanonicalPromptResponse,
   AgentOsV1HandlerCatalogEntry,
   AgentOsV1HandlerCatalogSnapshot,
   AgentOsV1HandlerTransitionCommand,
@@ -91,6 +117,11 @@ export type {
   PersonalStateClassification,
 } from "./agent-os-v1-types.js";
 
+export type {
+  AgentOsV1CanonicalPromptAuthorityBinding,
+  AgentOsV1CanonicalPromptMessage,
+} from "./agent-os-v1-types.js";
+
 export const AGENT_OS_V1_SUPPORTED_FEATURES = Object.freeze([
   "capability-packages",
   "delegation-grants",
@@ -98,12 +129,14 @@ export const AGENT_OS_V1_SUPPORTED_FEATURES = Object.freeze([
 
 const SUPPORTED_FEATURES = new Set<string>(AGENT_OS_V1_SUPPORTED_FEATURES);
 const DIGEST_PATTERN = /^sha256:[0-9a-f]{64}$/u;
+const ZERO_SHA256 = `sha256:${"0".repeat(64)}`;
 const SECRET_REF_PATTERN = /^secret-ref:[a-z0-9][a-z0-9._/-]{0,127}$/u;
 const IDENTIFIER_PATTERN = /^[a-z][a-z0-9._/-]{0,127}$/u;
 const OPAQUE_REF_PATTERN = /^[a-z][a-z0-9._-]{0,63}:[a-z][a-z0-9._-]{0,127}$/u;
 const LEASE_EPOCH_REF_PATTERN = /^lease-epoch:[a-z][a-z0-9._-]{0,127}$/u;
 const ROTATION_GENERATION_REF_PATTERN = /^rotation:[a-z][a-z0-9._-]{0,127}$/u;
 const REVOCATION_GENERATION_REF_PATTERN = /^revocation:[a-z][a-z0-9._-]{0,127}$/u;
+const PROMPT_STREAM_EPOCH_PATTERN = /^stream-epoch:[a-z][a-z0-9._-]{0,127}$/u;
 const RFC3339_MILLIS_PATTERN =
   /^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}Z$/u;
 const PROTOCOL_VERSION_PATTERN = /^(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)$/u;
@@ -685,6 +718,773 @@ export function parseAgentOsV1ExecutionClaimBinding(
     claimFence: positiveInteger(value.claimFence, "execution claim binding claimFence"),
     expiresAt: instant(value.expiresAt, "execution claim binding expiresAt"),
   });
+}
+
+/** prompt.start 只接收规范化纯数据，并复制/冻结所有 authority-bearing 输入。 */
+export function parseAgentOsV1CanonicalPromptStartRequest(
+  input: unknown
+): Readonly<AgentOsV1CanonicalPromptStartRequest> {
+  return parseCanonicalPromptStartRequest(input, true);
+}
+
+function parseCanonicalPromptStartRequest(
+  input: unknown,
+  enforceSemanticDigests: boolean
+): Readonly<AgentOsV1CanonicalPromptStartRequest> {
+  const value = record(input, "canonical prompt.start request");
+  exact(
+    value,
+    [
+      "schemaVersion",
+      "operation",
+      "runId",
+      "turnId",
+      "attemptId",
+      "instanceId",
+      "storeGeneration",
+      "claimId",
+      "requestedAt",
+      "authority",
+      "grant",
+      "instance",
+      "prompt",
+      "promptDigest",
+      "intentDigest",
+    ],
+    "canonical prompt.start request"
+  );
+  if (value.schemaVersion !== "agent-os-canonical-prompt/v1")
+    fail("UNSUPPORTED_VERSION", "canonical prompt.start schemaVersion is unsupported");
+  if (value.operation !== "prompt.start")
+    fail("INVALID_VALUE", "canonical prompt.start operation must equal prompt.start");
+
+  const authority = record(value.authority, "canonical prompt.start authority");
+  exact(
+    authority,
+    [
+      "tenantId",
+      "workloadId",
+      "authorityDomain",
+      "audience",
+      "definitionDigest",
+      "policyDigest",
+      "capabilityDigest",
+    ],
+    "canonical prompt.start authority"
+  );
+  const canonicalPrompt = canonicalPromptInput(value.prompt);
+
+  const parsed: Readonly<AgentOsV1CanonicalPromptStartRequest> = deepFreeze({
+    schemaVersion: "agent-os-canonical-prompt/v1",
+    operation: "prompt.start",
+    runId: identifier(value.runId, "canonical prompt.start runId"),
+    turnId: identifier(value.turnId, "canonical prompt.start turnId"),
+    attemptId: identifier(value.attemptId, "canonical prompt.start attemptId"),
+    instanceId: identifier(value.instanceId, "canonical prompt.start instanceId"),
+    storeGeneration: positiveInteger(
+      value.storeGeneration,
+      "canonical prompt.start storeGeneration"
+    ),
+    claimId: identifier(value.claimId, "canonical prompt.start claimId"),
+    requestedAt: instant(value.requestedAt, "canonical prompt.start requestedAt"),
+    authority: {
+      tenantId: identifier(authority.tenantId, "canonical prompt.start authority tenantId"),
+      workloadId: identifier(authority.workloadId, "canonical prompt.start authority workloadId"),
+      authorityDomain: identifier(
+        authority.authorityDomain,
+        "canonical prompt.start authority authorityDomain"
+      ),
+      audience: scopes(authority.audience, "canonical prompt.start authority audience"),
+      definitionDigest: digest(
+        authority.definitionDigest,
+        "canonical prompt.start authority definitionDigest"
+      ),
+      policyDigest: digest(authority.policyDigest, "canonical prompt.start authority policyDigest"),
+      capabilityDigest: digest(
+        authority.capabilityDigest,
+        "canonical prompt.start authority capabilityDigest"
+      ),
+    },
+    grant: parseAgentOsV1ExecutionGrant(value.grant),
+    instance: parseAgentOsV1ExecutionInstance(value.instance),
+    prompt: canonicalPrompt,
+    promptDigest: digest(value.promptDigest, "canonical prompt.start promptDigest"),
+    intentDigest: digest(value.intentDigest, "canonical prompt.start intentDigest"),
+  });
+  if (enforceSemanticDigests && parsed.promptDigest !== canonicalPromptDigest(parsed.prompt)) {
+    fail("DRIFT_DETECTED", "canonical prompt.start promptDigest does not match its prompt");
+  }
+  if (enforceSemanticDigests && parsed.intentDigest !== canonicalPromptIntentDigest(parsed)) {
+    fail("DRIFT_DETECTED", "canonical prompt.start intentDigest does not match its intent");
+  }
+  return parsed;
+}
+
+export interface AgentOsV1CanonicalPromptSemanticBinding {
+  readonly payload: Readonly<AgentOsV1CanonicalPromptRequest>;
+  readonly authorityEnvelopeRef: Readonly<DigestRef>;
+}
+
+/** 为 canonical Prompt 生成唯一的 prompt、intent 与 authority envelope 语义绑定。 */
+export function createAgentOsV1CanonicalPromptSemanticBinding(
+  input: unknown
+): Readonly<AgentOsV1CanonicalPromptSemanticBinding> {
+  const value = record(input, "canonical prompt semantic binding");
+  exact(
+    value,
+    ["requestId", "expectedRevision", "snapshot", "payload"],
+    "canonical prompt semantic binding"
+  );
+  const requestId = identifier(value.requestId, "canonical prompt semantic binding requestId");
+  const expectedRevision = nonNegativeInteger(
+    value.expectedRevision,
+    "canonical prompt semantic binding expectedRevision"
+  );
+  const snapshot = parseAgentOsV1NegotiatedSnapshot(value.snapshot);
+  if (snapshot.protocolId !== "execution.v1") {
+    fail("DRIFT_DETECTED", "canonical prompt semantic binding requires execution.v1");
+  }
+  const payloadValue = record(value.payload, "canonical prompt semantic binding payload");
+  let payload: Readonly<AgentOsV1CanonicalPromptRequest>;
+  if (payloadValue.operation === "prompt.start") {
+    const promptDigest = canonicalPromptDigest(payloadValue.prompt);
+    const structural = parseCanonicalPromptStartRequest(
+      {
+        ...payloadValue,
+        promptDigest: payloadValue.promptDigest ?? promptDigest,
+        intentDigest: payloadValue.intentDigest ?? ZERO_SHA256,
+      },
+      false
+    );
+    const intentDigest = canonicalPromptIntentDigest({ ...structural, promptDigest });
+    if (payloadValue.promptDigest !== undefined && structural.promptDigest !== promptDigest) {
+      fail("DRIFT_DETECTED", "canonical prompt semantic binding promptDigest drifted");
+    }
+    if (payloadValue.intentDigest !== undefined && structural.intentDigest !== intentDigest) {
+      fail("DRIFT_DETECTED", "canonical prompt semantic binding intentDigest drifted");
+    }
+    payload = parseCanonicalPromptStartRequest({ ...structural, promptDigest, intentDigest }, true);
+  } else {
+    payload = parseAgentOsV1CanonicalPromptRequest(payloadValue);
+  }
+  const authorityEnvelopeRef = deepFreeze({
+    ref: opaqueRef(
+      `authority:canonical-prompt.${requestId}`,
+      "canonical prompt semantic binding authorityEnvelopeRef"
+    ),
+    digest: canonicalPromptProjectionDigest({
+      schemaVersion: "agent-os-canonical-prompt-authority/v1",
+      requestId,
+      expectedRevision,
+      snapshot,
+      payload: canonicalPromptAuthoritySubset(payload),
+    }),
+  });
+  return deepFreeze({ payload, authorityEnvelopeRef });
+}
+
+export function assertAgentOsV1CanonicalPromptSemanticBinding(
+  envelopeInput: unknown,
+  snapshotInput: unknown,
+  payloadInput: unknown
+): Readonly<AgentOsV1CanonicalPromptSemanticBinding> {
+  const envelope = parseAgentOsV1AuthorityRequestEnvelope(envelopeInput);
+  const binding = createAgentOsV1CanonicalPromptSemanticBinding({
+    requestId: envelope.requestId,
+    expectedRevision: envelope.expectedRevision,
+    snapshot: snapshotInput,
+    payload: payloadInput,
+  });
+  if (
+    envelope.authorityEnvelopeRef.ref !== binding.authorityEnvelopeRef.ref ||
+    envelope.authorityEnvelopeRef.digest !== binding.authorityEnvelopeRef.digest
+  ) {
+    fail("DRIFT_DETECTED", "canonical prompt authorityEnvelopeRef does not match the request");
+  }
+  return binding;
+}
+
+export function createAgentOsV1CanonicalPromptEvent(
+  input: unknown
+): Readonly<AgentOsV1CanonicalPromptEvent> {
+  const unsigned = canonicalPromptEventUnsignedOf(input);
+  return deepFreeze({ ...unsigned, digest: canonicalPromptProjectionDigest(unsigned) });
+}
+
+export function parseAgentOsV1CanonicalPromptEvent(
+  input: unknown
+): Readonly<AgentOsV1CanonicalPromptEvent> {
+  const value = record(input, "canonical prompt event");
+  exact(
+    value,
+    [
+      "schemaVersion",
+      "eventId",
+      "runId",
+      "attemptId",
+      "streamEpoch",
+      "sequence",
+      "eventType",
+      "payload",
+      "createdAt",
+      "digest",
+    ],
+    "canonical prompt event"
+  );
+  const unsigned = canonicalPromptEventUnsignedOf({
+    schemaVersion: value.schemaVersion,
+    eventId: value.eventId,
+    runId: value.runId,
+    attemptId: value.attemptId,
+    streamEpoch: value.streamEpoch,
+    sequence: value.sequence,
+    eventType: value.eventType,
+    payload: value.payload,
+    createdAt: value.createdAt,
+  });
+  const suppliedDigest = digest(value.digest, "canonical prompt event digest");
+  if (suppliedDigest !== canonicalPromptProjectionDigest(unsigned))
+    fail("DRIFT_DETECTED", "canonical prompt event digest does not match its content");
+  return deepFreeze({ ...unsigned, digest: suppliedDigest });
+}
+
+export function createAgentOsV1CanonicalPromptCursor(
+  input: unknown
+): Readonly<AgentOsV1CanonicalPromptCursor> {
+  const unsigned = canonicalPromptCursorUnsignedOf(input);
+  return deepFreeze({ ...unsigned, digest: canonicalPromptProjectionDigest(unsigned) });
+}
+
+export function parseAgentOsV1CanonicalPromptCursor(
+  input: unknown
+): Readonly<AgentOsV1CanonicalPromptCursor> {
+  const value = record(input, "canonical prompt cursor");
+  exact(
+    value,
+    ["schemaVersion", "runId", "streamEpoch", "sequence", "watermark", "digest"],
+    "canonical prompt cursor"
+  );
+  const unsigned = canonicalPromptCursorUnsignedOf({
+    schemaVersion: value.schemaVersion,
+    runId: value.runId,
+    streamEpoch: value.streamEpoch,
+    sequence: value.sequence,
+    watermark: value.watermark,
+  });
+  const suppliedDigest = digest(value.digest, "canonical prompt cursor digest");
+  if (suppliedDigest !== canonicalPromptProjectionDigest(unsigned))
+    fail("DRIFT_DETECTED", "canonical prompt cursor digest does not match its content");
+  return deepFreeze({ ...unsigned, digest: suppliedDigest });
+}
+
+export function createAgentOsV1CanonicalPromptSnapshot(
+  input: unknown
+): Readonly<AgentOsV1CanonicalPromptSnapshot> {
+  const unsigned = canonicalPromptSnapshotUnsignedOf(input);
+  return deepFreeze({ ...unsigned, digest: canonicalPromptProjectionDigest(unsigned) });
+}
+
+export function parseAgentOsV1CanonicalPromptSnapshot(
+  input: unknown
+): Readonly<AgentOsV1CanonicalPromptSnapshot> {
+  const value = record(input, "canonical prompt snapshot");
+  exact(
+    value,
+    [
+      "schemaVersion",
+      "runId",
+      "attemptId",
+      "instanceId",
+      "storeGeneration",
+      "streamEpoch",
+      "watermark",
+      "state",
+      "terminal",
+      "updatedAt",
+      "digest",
+    ],
+    "canonical prompt snapshot"
+  );
+  const unsigned = canonicalPromptSnapshotUnsignedOf({
+    schemaVersion: value.schemaVersion,
+    runId: value.runId,
+    attemptId: value.attemptId,
+    instanceId: value.instanceId,
+    storeGeneration: value.storeGeneration,
+    streamEpoch: value.streamEpoch,
+    watermark: value.watermark,
+    state: value.state,
+    terminal: value.terminal,
+    updatedAt: value.updatedAt,
+  });
+  const suppliedDigest = digest(value.digest, "canonical prompt snapshot digest");
+  if (suppliedDigest !== canonicalPromptProjectionDigest(unsigned))
+    fail("DRIFT_DETECTED", "canonical prompt snapshot digest does not match its content");
+  return deepFreeze({ ...unsigned, digest: suppliedDigest });
+}
+
+export function parseAgentOsV1CanonicalPromptReadRequest(
+  input: unknown
+): Readonly<AgentOsV1CanonicalPromptReadRequest> {
+  const value = record(input, "canonical prompt.read request");
+  exact(
+    value,
+    ["schemaVersion", "operation", "runId", "cursor", "limit", "readAt"],
+    "canonical prompt.read request"
+  );
+  if (value.schemaVersion !== "agent-os-canonical-prompt/v1")
+    fail("UNSUPPORTED_VERSION", "canonical prompt.read schemaVersion is unsupported");
+  if (value.operation !== "prompt.read")
+    fail("INVALID_VALUE", "canonical prompt.read operation must equal prompt.read");
+  const runId = identifier(value.runId, "canonical prompt.read runId");
+  const cursor = value.cursor === null ? null : parseAgentOsV1CanonicalPromptCursor(value.cursor);
+  if (cursor !== null && cursor.runId !== runId)
+    fail("DRIFT_DETECTED", "canonical prompt.read cursor belongs to another Run");
+  const limit = positiveInteger(value.limit, "canonical prompt.read limit");
+  if (limit > 256) fail("INVALID_VALUE", "canonical prompt.read limit exceeds 256 events");
+  return deepFreeze({
+    schemaVersion: "agent-os-canonical-prompt/v1",
+    operation: "prompt.read",
+    runId,
+    cursor,
+    limit,
+    readAt: instant(value.readAt, "canonical prompt.read readAt"),
+  });
+}
+
+export function parseAgentOsV1CanonicalPromptCancelRequest(
+  input: unknown
+): Readonly<AgentOsV1CanonicalPromptCancelRequest> {
+  const value = record(input, "canonical prompt.cancel request");
+  exact(
+    value,
+    [
+      "schemaVersion",
+      "operation",
+      "runId",
+      "claimId",
+      "claimFence",
+      "reason",
+      "resultDigest",
+      "cancelledAt",
+    ],
+    "canonical prompt.cancel request"
+  );
+  if (value.schemaVersion !== "agent-os-canonical-prompt/v1")
+    fail("UNSUPPORTED_VERSION", "canonical prompt.cancel schemaVersion is unsupported");
+  if (value.operation !== "prompt.cancel")
+    fail("INVALID_VALUE", "canonical prompt.cancel operation must equal prompt.cancel");
+  return deepFreeze({
+    schemaVersion: "agent-os-canonical-prompt/v1",
+    operation: "prompt.cancel",
+    runId: identifier(value.runId, "canonical prompt.cancel runId"),
+    claimId: identifier(value.claimId, "canonical prompt.cancel claimId"),
+    claimFence: positiveInteger(value.claimFence, "canonical prompt.cancel claimFence"),
+    reason: boundedUtf8String(value.reason, "canonical prompt.cancel reason", 1_024),
+    resultDigest: digest(value.resultDigest, "canonical prompt.cancel resultDigest"),
+    cancelledAt: instant(value.cancelledAt, "canonical prompt.cancel cancelledAt"),
+  });
+}
+
+export function parseAgentOsV1CanonicalPromptRequest(
+  input: unknown
+): Readonly<AgentOsV1CanonicalPromptRequest> {
+  const value = record(input, "canonical prompt request");
+  switch (value.operation) {
+    case "prompt.start":
+      return parseAgentOsV1CanonicalPromptStartRequest(input);
+    case "prompt.read":
+      return parseAgentOsV1CanonicalPromptReadRequest(input);
+    case "prompt.cancel":
+      return parseAgentOsV1CanonicalPromptCancelRequest(input);
+    default:
+      fail("INVALID_VALUE", "canonical prompt request operation is invalid");
+  }
+}
+
+export function parseAgentOsV1CanonicalPromptResponse(
+  input: unknown
+): Readonly<AgentOsV1CanonicalPromptResponse> {
+  const value = record(input, "canonical prompt response");
+  exact(
+    value,
+    ["schemaVersion", "operation", "disposition", "snapshot", "events", "cursor", "replayed"],
+    "canonical prompt response"
+  );
+  if (value.schemaVersion !== "agent-os-canonical-prompt/v1")
+    fail("UNSUPPORTED_VERSION", "canonical prompt response schemaVersion is unsupported");
+  if (
+    value.operation !== "prompt.start" &&
+    value.operation !== "prompt.read" &&
+    value.operation !== "prompt.cancel"
+  )
+    fail("INVALID_VALUE", "canonical prompt response operation is invalid");
+  if (value.disposition !== "events" && value.disposition !== "snapshot-required")
+    fail("INVALID_VALUE", "canonical prompt response disposition is invalid");
+  if (value.operation !== "prompt.read" && value.disposition === "snapshot-required")
+    fail("INVALID_VALUE", "only prompt.read may require an atomic snapshot");
+  const snapshot = parseAgentOsV1CanonicalPromptSnapshot(value.snapshot);
+  const cursor = parseAgentOsV1CanonicalPromptCursor(value.cursor);
+  const events = arrayValues(value.events, "canonical prompt response events").map((event) =>
+    parseAgentOsV1CanonicalPromptEvent(event)
+  );
+  if (events.length > 256)
+    fail("INVALID_VALUE", "canonical prompt response exceeds the 256-event budget");
+  if (
+    cursor.runId !== snapshot.runId ||
+    cursor.streamEpoch !== snapshot.streamEpoch ||
+    cursor.watermark !== snapshot.watermark
+  )
+    fail("DRIFT_DETECTED", "canonical prompt response cursor differs from its snapshot");
+  if (
+    events.some(
+      (event) =>
+        event.runId !== snapshot.runId ||
+        event.attemptId !== snapshot.attemptId ||
+        event.streamEpoch !== snapshot.streamEpoch ||
+        event.sequence > snapshot.watermark
+    )
+  )
+    fail("DRIFT_DETECTED", "canonical prompt response event differs from its snapshot");
+  if (
+    events.some((event, index) => index > 0 && event.sequence !== events[index - 1]!.sequence + 1)
+  )
+    fail("DRIFT_DETECTED", "canonical prompt response events are not contiguous");
+  const lastEvent = events.at(-1);
+  if (lastEvent !== undefined && lastEvent.sequence !== cursor.sequence)
+    fail("DRIFT_DETECTED", "canonical prompt response cursor does not follow its last event");
+  if (
+    value.disposition === "snapshot-required" &&
+    (cursor.sequence !== snapshot.watermark ||
+      events.length !== snapshot.watermark ||
+      (events.length > 0 && events[0]?.sequence !== 1))
+  )
+    fail(
+      "DRIFT_DETECTED",
+      "snapshot-required must atomically rebuild every fact through its snapshot watermark"
+    );
+  return deepFreeze({
+    schemaVersion: "agent-os-canonical-prompt/v1",
+    operation: value.operation,
+    disposition: value.disposition,
+    snapshot,
+    events,
+    cursor,
+    replayed: booleanValue(value.replayed, "canonical prompt response replayed"),
+  });
+}
+
+function canonicalPromptEventUnsignedOf(
+  input: unknown
+): Omit<AgentOsV1CanonicalPromptEvent, "digest"> {
+  const value = record(input, "canonical prompt event unsigned");
+  exact(
+    value,
+    [
+      "schemaVersion",
+      "eventId",
+      "runId",
+      "attemptId",
+      "streamEpoch",
+      "sequence",
+      "eventType",
+      "payload",
+      "createdAt",
+    ],
+    "canonical prompt event unsigned"
+  );
+  if (value.schemaVersion !== "agent-os-canonical-prompt/v1")
+    fail("UNSUPPORTED_VERSION", "canonical prompt event schemaVersion is unsupported");
+  const eventType = canonicalPromptEventType(value.eventType);
+  return {
+    schemaVersion: "agent-os-canonical-prompt/v1",
+    eventId: identifier(value.eventId, "canonical prompt event eventId"),
+    runId: identifier(value.runId, "canonical prompt event runId"),
+    attemptId: identifier(value.attemptId, "canonical prompt event attemptId"),
+    streamEpoch: canonicalPromptStreamEpoch(
+      value.streamEpoch,
+      "canonical prompt event streamEpoch"
+    ),
+    sequence: positiveInteger(value.sequence, "canonical prompt event sequence"),
+    eventType,
+    payload: canonicalPromptEventPayload(value.payload, eventType),
+    createdAt: instant(value.createdAt, "canonical prompt event createdAt"),
+  };
+}
+
+function canonicalPromptCursorUnsignedOf(
+  input: unknown
+): Omit<AgentOsV1CanonicalPromptCursor, "digest"> {
+  const value = record(input, "canonical prompt cursor unsigned");
+  exact(
+    value,
+    ["schemaVersion", "runId", "streamEpoch", "sequence", "watermark"],
+    "canonical prompt cursor unsigned"
+  );
+  if (value.schemaVersion !== "agent-os-canonical-prompt/v1")
+    fail("UNSUPPORTED_VERSION", "canonical prompt cursor schemaVersion is unsupported");
+  const sequence = nonNegativeInteger(value.sequence, "canonical prompt cursor sequence");
+  const watermark = nonNegativeInteger(value.watermark, "canonical prompt cursor watermark");
+  if (sequence > watermark)
+    fail("INVALID_VALUE", "canonical prompt cursor sequence exceeds its watermark");
+  return {
+    schemaVersion: "agent-os-canonical-prompt/v1",
+    runId: identifier(value.runId, "canonical prompt cursor runId"),
+    streamEpoch: canonicalPromptStreamEpoch(
+      value.streamEpoch,
+      "canonical prompt cursor streamEpoch"
+    ),
+    sequence,
+    watermark,
+  };
+}
+
+function canonicalPromptSnapshotUnsignedOf(
+  input: unknown
+): Omit<AgentOsV1CanonicalPromptSnapshot, "digest"> {
+  const value = record(input, "canonical prompt snapshot unsigned");
+  exact(
+    value,
+    [
+      "schemaVersion",
+      "runId",
+      "attemptId",
+      "instanceId",
+      "storeGeneration",
+      "streamEpoch",
+      "watermark",
+      "state",
+      "terminal",
+      "updatedAt",
+    ],
+    "canonical prompt snapshot unsigned"
+  );
+  if (value.schemaVersion !== "agent-os-canonical-prompt/v1")
+    fail("UNSUPPORTED_VERSION", "canonical prompt snapshot schemaVersion is unsupported");
+  const state = canonicalPromptState(value.state);
+  const terminal = booleanValue(value.terminal, "canonical prompt snapshot terminal");
+  if (terminal !== (state !== "running"))
+    fail("INVALID_VALUE", "canonical prompt snapshot terminal flag differs from state");
+  return {
+    schemaVersion: "agent-os-canonical-prompt/v1",
+    runId: identifier(value.runId, "canonical prompt snapshot runId"),
+    attemptId: identifier(value.attemptId, "canonical prompt snapshot attemptId"),
+    instanceId: identifier(value.instanceId, "canonical prompt snapshot instanceId"),
+    storeGeneration: positiveInteger(
+      value.storeGeneration,
+      "canonical prompt snapshot storeGeneration"
+    ),
+    streamEpoch: canonicalPromptStreamEpoch(
+      value.streamEpoch,
+      "canonical prompt snapshot streamEpoch"
+    ),
+    watermark: nonNegativeInteger(value.watermark, "canonical prompt snapshot watermark"),
+    state,
+    terminal,
+    updatedAt: instant(value.updatedAt, "canonical prompt snapshot updatedAt"),
+  };
+}
+
+function canonicalPromptEventType(value: unknown): AgentOsV1CanonicalPromptEventType {
+  if (
+    value !== "prompt.accepted" &&
+    value !== "provider.output" &&
+    value !== "provider.failure" &&
+    value !== "provider.usage" &&
+    value !== "provider.receipt" &&
+    value !== "run.unknown" &&
+    value !== "run.terminal"
+  )
+    fail("INVALID_VALUE", "canonical prompt eventType is invalid");
+  return value;
+}
+
+function canonicalPromptEventPayload(
+  input: unknown,
+  eventType: AgentOsV1CanonicalPromptEventType
+): AgentOsV1CanonicalPromptEventPayload {
+  const value = record(input, `canonical prompt ${eventType} payload`);
+  switch (eventType) {
+    case "prompt.accepted":
+      exact(
+        value,
+        [
+          "requestId",
+          "promptDigest",
+          "intentDigest",
+          "grantId",
+          "claimId",
+          "claimFence",
+          "storeGeneration",
+        ],
+        "canonical prompt accepted payload"
+      );
+      return {
+        requestId: identifier(value.requestId, "canonical prompt accepted requestId"),
+        promptDigest: digest(value.promptDigest, "canonical prompt accepted promptDigest"),
+        intentDigest: digest(value.intentDigest, "canonical prompt accepted intentDigest"),
+        grantId: identifier(value.grantId, "canonical prompt accepted grantId"),
+        claimId: identifier(value.claimId, "canonical prompt accepted claimId"),
+        claimFence: positiveInteger(value.claimFence, "canonical prompt accepted claimFence"),
+        storeGeneration: positiveInteger(
+          value.storeGeneration,
+          "canonical prompt accepted storeGeneration"
+        ),
+      };
+    case "provider.output":
+      exact(value, ["text"], "canonical prompt output payload");
+      return { text: boundedUtf8String(value.text, "canonical prompt output text", 262_144) };
+    case "provider.failure":
+      exact(value, ["code", "message"], "canonical prompt failure payload");
+      return {
+        code: identifier(value.code, "canonical prompt failure code"),
+        message: boundedUtf8String(value.message, "canonical prompt failure message", 8_192),
+      };
+    case "provider.usage":
+      exact(value, ["inputTokens", "outputTokens"], "canonical prompt usage payload");
+      return {
+        inputTokens: nonNegativeInteger(value.inputTokens, "canonical prompt usage inputTokens"),
+        outputTokens: nonNegativeInteger(value.outputTokens, "canonical prompt usage outputTokens"),
+      };
+    case "provider.receipt":
+      exact(value, ["providerId", "receiptDigest"], "canonical prompt receipt payload");
+      return {
+        providerId: identifier(value.providerId, "canonical prompt receipt providerId"),
+        receiptDigest: digest(value.receiptDigest, "canonical prompt receipt receiptDigest"),
+      };
+    case "run.unknown":
+      exact(value, ["reason"], "canonical prompt unknown payload");
+      return {
+        reason: boundedUtf8String(value.reason, "canonical prompt unknown reason", 8_192),
+      };
+    case "run.terminal": {
+      exact(value, ["status", "resultDigest"], "canonical prompt terminal payload");
+      if (
+        value.status !== "succeeded" &&
+        value.status !== "failed" &&
+        value.status !== "cancelled" &&
+        value.status !== "unknown"
+      )
+        fail("INVALID_VALUE", "canonical prompt terminal status is invalid");
+      return {
+        status: value.status,
+        resultDigest: digest(value.resultDigest, "canonical prompt terminal resultDigest"),
+      };
+    }
+  }
+}
+
+function canonicalPromptState(value: unknown): AgentOsV1CanonicalPromptState {
+  if (
+    value !== "running" &&
+    value !== "succeeded" &&
+    value !== "failed" &&
+    value !== "cancelled" &&
+    value !== "unknown"
+  )
+    fail("INVALID_VALUE", "canonical prompt snapshot state is invalid");
+  return value;
+}
+
+function canonicalPromptStreamEpoch(
+  value: unknown,
+  label: string
+): AgentOsV1CanonicalPromptStreamEpoch {
+  if (typeof value !== "string" || !PROMPT_STREAM_EPOCH_PATTERN.test(value))
+    fail("INVALID_VALUE", `${label} is invalid`);
+  return value as AgentOsV1CanonicalPromptStreamEpoch;
+}
+
+function canonicalPromptProjectionDigest(value: unknown): string {
+  return `sha256:${sha256Hex(canonicalJson(value))}`;
+}
+
+function canonicalPromptInput(input: unknown): Readonly<AgentOsV1CanonicalPromptInput> {
+  const prompt = record(input, "canonical prompt.start prompt");
+  exact(prompt, ["messages"], "canonical prompt.start prompt");
+  const messages = arrayValues(prompt.messages, "canonical prompt.start prompt messages");
+  if (messages.length === 0 || messages.length > 32)
+    fail("INVALID_VALUE", "canonical prompt.start must contain between 1 and 32 messages");
+  let promptBytes = 0;
+  const canonicalMessages = messages.map((message, index) => {
+    const item = record(message, `canonical prompt.start prompt messages[${index}]`);
+    exact(item, ["role", "content"], `canonical prompt.start prompt messages[${index}]`);
+    if (item.role !== "user")
+      fail("INVALID_VALUE", `canonical prompt.start prompt messages[${index}].role is invalid`);
+    if (typeof item.content !== "string" || item.content.length === 0)
+      fail("INVALID_VALUE", `canonical prompt.start prompt messages[${index}].content is invalid`);
+    promptBytes += new TextEncoder().encode(item.content).byteLength;
+    return { role: "user" as const, content: item.content };
+  });
+  if (promptBytes > 65_536)
+    fail("INVALID_VALUE", "canonical prompt.start prompt exceeds the 65536-byte budget");
+  return deepFreeze({ messages: canonicalMessages });
+}
+
+function canonicalPromptDigest(prompt: unknown): string {
+  return canonicalPromptProjectionDigest({
+    schemaVersion: "agent-os-canonical-prompt-input/v1",
+    prompt: canonicalPromptInput(prompt),
+  });
+}
+
+function canonicalPromptIntentDigest(
+  payload: Readonly<AgentOsV1CanonicalPromptStartRequest>
+): string {
+  return canonicalPromptProjectionDigest({
+    schemaVersion: payload.schemaVersion,
+    operation: payload.operation,
+    runId: payload.runId,
+    turnId: payload.turnId,
+    attemptId: payload.attemptId,
+    instanceId: payload.instanceId,
+    storeGeneration: payload.storeGeneration,
+    claimId: payload.claimId,
+    requestedAt: payload.requestedAt,
+    authority: payload.authority,
+    grant: payload.grant,
+    instance: payload.instance,
+    promptDigest: payload.promptDigest,
+  });
+}
+
+function canonicalPromptAuthoritySubset(
+  payload: Readonly<AgentOsV1CanonicalPromptRequest>
+): unknown {
+  switch (payload.operation) {
+    case "prompt.start":
+      return {
+        operation: payload.operation,
+        runId: payload.runId,
+        turnId: payload.turnId,
+        attemptId: payload.attemptId,
+        instanceId: payload.instanceId,
+        storeGeneration: payload.storeGeneration,
+        claimId: payload.claimId,
+        requestedAt: payload.requestedAt,
+        authority: payload.authority,
+        promptDigest: payload.promptDigest,
+        intentDigest: payload.intentDigest,
+      };
+    case "prompt.read":
+      return {
+        operation: payload.operation,
+        runId: payload.runId,
+        cursorDigest: payload.cursor?.digest ?? null,
+        limit: payload.limit,
+        readAt: payload.readAt,
+      };
+    case "prompt.cancel":
+      return {
+        operation: payload.operation,
+        runId: payload.runId,
+        claimId: payload.claimId,
+        claimFence: payload.claimFence,
+        reason: payload.reason,
+        resultDigest: payload.resultDigest,
+        cancelledAt: payload.cancelledAt,
+      };
+  }
 }
 
 /** 严格解析一个协议 offer；版本是否已注册由 negotiation registry 决定。 */
@@ -1912,6 +2712,16 @@ function instant(value: unknown, label: string): string {
     new Date(value).toISOString() !== value
   )
     fail("INVALID_VALUE", `${label} must be a canonical RFC3339 millisecond instant`);
+  return value;
+}
+
+function boundedUtf8String(value: unknown, label: string, maxBytes: number): string {
+  if (
+    typeof value !== "string" ||
+    value.length === 0 ||
+    new TextEncoder().encode(value).byteLength > maxBytes
+  )
+    fail("INVALID_VALUE", `${label} must be a non-empty string within ${maxBytes} UTF-8 bytes`);
   return value;
 }
 

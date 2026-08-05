@@ -234,6 +234,152 @@ export interface ExecutionClaimBinding {
   readonly expiresAt: string;
 }
 
+export interface AgentOsV1CanonicalPromptAuthorityBinding {
+  readonly tenantId: string;
+  readonly workloadId: string;
+  readonly authorityDomain: string;
+  readonly audience: readonly string[];
+  readonly definitionDigest: string;
+  readonly policyDigest: string;
+  readonly capabilityDigest: string;
+}
+
+export interface AgentOsV1CanonicalPromptMessage {
+  readonly role: "user";
+  readonly content: string;
+}
+
+export interface AgentOsV1CanonicalPromptInput {
+  readonly messages: readonly AgentOsV1CanonicalPromptMessage[];
+}
+
+/** Control 提交给 Worker 的 canonical prompt.start；生命周期写入仍只由 Kernel 完成。 */
+export interface AgentOsV1CanonicalPromptStartRequest {
+  readonly schemaVersion: "agent-os-canonical-prompt/v1";
+  readonly operation: "prompt.start";
+  readonly runId: string;
+  readonly turnId: string;
+  readonly attemptId: string;
+  readonly instanceId: string;
+  readonly storeGeneration: number;
+  readonly claimId: string;
+  readonly requestedAt: string;
+  readonly authority: Readonly<AgentOsV1CanonicalPromptAuthorityBinding>;
+  readonly grant: Readonly<ExecutionGrant>;
+  readonly instance: Readonly<ExecutionInstance>;
+  readonly prompt: Readonly<AgentOsV1CanonicalPromptInput>;
+  readonly promptDigest: string;
+  readonly intentDigest: string;
+}
+
+export type AgentOsV1CanonicalPromptStreamEpoch = `stream-epoch:${string}`;
+export type AgentOsV1CanonicalPromptEventType =
+  | "prompt.accepted"
+  | "provider.output"
+  | "provider.failure"
+  | "provider.usage"
+  | "provider.receipt"
+  | "run.unknown"
+  | "run.terminal";
+
+export type AgentOsV1CanonicalPromptEventPayload =
+  | Readonly<{
+      requestId: string;
+      promptDigest: string;
+      intentDigest: string;
+      grantId: string;
+      claimId: string;
+      claimFence: number;
+      storeGeneration: number;
+    }>
+  | Readonly<{ text: string }>
+  | Readonly<{ code: string; message: string }>
+  | Readonly<{ inputTokens: number; outputTokens: number }>
+  | Readonly<{ providerId: string; receiptDigest: string }>
+  | Readonly<{ reason: string }>
+  | Readonly<{
+      status: "succeeded" | "failed" | "cancelled" | "unknown";
+      resultDigest: string;
+    }>;
+
+export interface AgentOsV1CanonicalPromptEvent {
+  readonly schemaVersion: "agent-os-canonical-prompt/v1";
+  readonly eventId: string;
+  readonly runId: string;
+  readonly attemptId: string;
+  readonly streamEpoch: AgentOsV1CanonicalPromptStreamEpoch;
+  readonly sequence: number;
+  readonly eventType: AgentOsV1CanonicalPromptEventType;
+  readonly payload: AgentOsV1CanonicalPromptEventPayload;
+  readonly createdAt: string;
+  readonly digest: string;
+}
+
+export interface AgentOsV1CanonicalPromptCursor {
+  readonly schemaVersion: "agent-os-canonical-prompt/v1";
+  readonly runId: string;
+  readonly streamEpoch: AgentOsV1CanonicalPromptStreamEpoch;
+  readonly sequence: number;
+  readonly watermark: number;
+  readonly digest: string;
+}
+
+export type AgentOsV1CanonicalPromptState =
+  | "running"
+  | "succeeded"
+  | "failed"
+  | "cancelled"
+  | "unknown";
+
+export interface AgentOsV1CanonicalPromptSnapshot {
+  readonly schemaVersion: "agent-os-canonical-prompt/v1";
+  readonly runId: string;
+  readonly attemptId: string;
+  readonly instanceId: string;
+  readonly storeGeneration: number;
+  readonly streamEpoch: AgentOsV1CanonicalPromptStreamEpoch;
+  readonly watermark: number;
+  readonly state: AgentOsV1CanonicalPromptState;
+  readonly terminal: boolean;
+  readonly updatedAt: string;
+  readonly digest: string;
+}
+
+export interface AgentOsV1CanonicalPromptReadRequest {
+  readonly schemaVersion: "agent-os-canonical-prompt/v1";
+  readonly operation: "prompt.read";
+  readonly runId: string;
+  readonly cursor: Readonly<AgentOsV1CanonicalPromptCursor> | null;
+  readonly limit: number;
+  readonly readAt: string;
+}
+
+export interface AgentOsV1CanonicalPromptCancelRequest {
+  readonly schemaVersion: "agent-os-canonical-prompt/v1";
+  readonly operation: "prompt.cancel";
+  readonly runId: string;
+  readonly claimId: string;
+  readonly claimFence: number;
+  readonly reason: string;
+  readonly resultDigest: string;
+  readonly cancelledAt: string;
+}
+
+export type AgentOsV1CanonicalPromptRequest =
+  | AgentOsV1CanonicalPromptStartRequest
+  | AgentOsV1CanonicalPromptReadRequest
+  | AgentOsV1CanonicalPromptCancelRequest;
+
+export interface AgentOsV1CanonicalPromptResponse {
+  readonly schemaVersion: "agent-os-canonical-prompt/v1";
+  readonly operation: "prompt.start" | "prompt.read" | "prompt.cancel";
+  readonly disposition: "events" | "snapshot-required";
+  readonly snapshot: Readonly<AgentOsV1CanonicalPromptSnapshot>;
+  readonly events: readonly Readonly<AgentOsV1CanonicalPromptEvent>[];
+  readonly cursor: Readonly<AgentOsV1CanonicalPromptCursor>;
+  readonly replayed: boolean;
+}
+
 /** 协商 offer 只描述协议能力，不拥有连接或 handler 生命周期。 */
 export interface AgentOsV1ProtocolOffer {
   readonly protocolId: AgentOsV1ProtocolFamily;
