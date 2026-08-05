@@ -193,20 +193,17 @@ export const AGENT_OS_V1_CONTRACT_SCHEMA = deepFreeze({
     remoteLeaseBinding: {
       type: "object",
       additionalProperties: false,
-      required: [
-        "kind",
-        "leaseId",
-        "epoch",
-        "instanceGeneration",
-        "scope",
-        "notBefore",
-        "expiresAt",
-      ],
+      required: ["kind", "leaseId", "epoch", "generation", "scope", "notBefore", "expiresAt"],
       properties: {
         kind: { const: "remote" },
         leaseId: { $ref: "#/$defs/identifier" },
         epoch: { $ref: "#/$defs/leaseEpochRef" },
-        instanceGeneration: { type: "integer", minimum: 0, maximum: 9007199254740991 },
+        generation: {
+          type: "integer",
+          minimum: 0,
+          maximum: 9007199254740991,
+          description: "Copied ExecutionInstance.generation pin; not a lease authority generation.",
+        },
         scope: { $ref: "#/$defs/identifiers" },
         notBefore: { $ref: "#/$defs/instant" },
         expiresAt: { $ref: "#/$defs/instant" },
@@ -1010,7 +1007,7 @@ function leaseBindingOf(value: unknown): LeaseBinding {
   if (input.kind !== "remote") fail("INVALID_VALUE", "executionGrant.leaseBinding.kind is invalid");
   exact(
     input,
-    ["kind", "leaseId", "epoch", "instanceGeneration", "scope", "notBefore", "expiresAt"],
+    ["kind", "leaseId", "epoch", "generation", "scope", "notBefore", "expiresAt"],
     "executionGrant.leaseBinding"
   );
   const notBefore = instant(input.notBefore, "executionGrant.leaseBinding.notBefore");
@@ -1021,10 +1018,7 @@ function leaseBindingOf(value: unknown): LeaseBinding {
     kind: "remote",
     leaseId: identifier(input.leaseId, "executionGrant.leaseBinding.leaseId"),
     epoch: leaseEpochRef(input.epoch, "executionGrant.leaseBinding.epoch"),
-    instanceGeneration: nonNegativeInteger(
-      input.instanceGeneration,
-      "executionGrant.leaseBinding.instanceGeneration"
-    ),
+    generation: nonNegativeInteger(input.generation, "executionGrant.leaseBinding.generation"),
     scope: scopes(input.scope, "executionGrant.leaseBinding.scope"),
     notBefore,
     expiresAt,
@@ -1109,8 +1103,11 @@ function validateRelationships(value: Omit<AgentOsV1Contract, "schemaVersion">):
   } else {
     if (executionGrant.leaseBinding.kind !== "remote")
       fail("INVALID_VALUE", "remote and delegated grants require a remote lease binding");
-    if (executionGrant.leaseBinding.instanceGeneration !== executionInstance.generation)
-      fail("DRIFT_DETECTED", "lease binding generation must pin the execution instance");
+    if (executionGrant.leaseBinding.generation !== executionInstance.generation)
+      fail(
+        "DRIFT_DETECTED",
+        "lease binding generation must equal the copied execution instance generation"
+      );
   }
   if (executionGrant.audience.length !== 1 || executionGrant.audience[0] !== hostProfile.hostId)
     fail("GRANT_EXPANSION", "grant audience must narrow to exactly one execution host");

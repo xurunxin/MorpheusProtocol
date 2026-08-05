@@ -84,7 +84,7 @@ function fixture(
           kind: "remote" as const,
           leaseId: "lease.demo",
           epoch: "lease-epoch:current" as const,
-          instanceGeneration: 1,
+          generation: 1,
           scope: ["workspace.read"],
           notBefore: "2026-08-05T00:00:00.000Z",
           expiresAt: "2026-08-05T00:10:00.000Z",
@@ -229,9 +229,12 @@ describe("Greenfield Agent OS v1 contract", () => {
     expect(AGENT_OS_V1_CONTRACT_SCHEMA.$defs.remoteLeaseBinding.properties.epoch.$ref).toBe(
       "#/$defs/leaseEpochRef"
     );
+    expect(AGENT_OS_V1_CONTRACT_SCHEMA.$defs.remoteLeaseBinding.properties.generation.type).toBe(
+      "integer"
+    );
     expect(
-      AGENT_OS_V1_CONTRACT_SCHEMA.$defs.remoteLeaseBinding.properties.instanceGeneration.type
-    ).toBe("integer");
+      AGENT_OS_V1_CONTRACT_SCHEMA.$defs.remoteLeaseBinding.properties.generation.description
+    ).toContain("not a lease authority generation");
     expect(AGENT_OS_V1_CONTRACT_SCHEMA.$defs.executionGrant.required).toContain("scope");
     expect(AGENT_OS_V1_CONTRACT_SCHEMA.$defs.executionGrant.required).toEqual(
       expect.arrayContaining(["sessionGrant", "leaseBinding", "attemptId", "instanceId"])
@@ -472,14 +475,12 @@ describe("Greenfield Agent OS v1 contract", () => {
     expectReject(malformedRevocation);
   });
 
-  test("keeps lease epoch, instance generation and key generation domains distinct", () => {
+  test("keeps lease epoch, copied instance generation and key generation domains distinct", () => {
     const parsed = parseAgentOsV1Contract(fixture());
     if (parsed.executionGrant.leaseBinding.kind !== "remote")
       throw new Error("worker fixture must bind a remote lease");
     expect(parsed.executionGrant.leaseBinding.epoch).toBe("lease-epoch:current");
-    expect(parsed.executionGrant.leaseBinding.instanceGeneration).toBe(
-      parsed.executionInstance.generation
-    );
+    expect(parsed.executionGrant.leaseBinding.generation).toBe(parsed.executionInstance.generation);
     expect(parsed.executionGrant.leaseBinding.epoch.startsWith("lease-epoch:")).toBe(true);
     expect(parsed.executionGrant.rotationGeneration.startsWith("rotation:")).toBe(true);
 
@@ -524,7 +525,7 @@ describe("Greenfield Agent OS v1 contract", () => {
     const generation = copy(fixture());
     (
       (generation.executionGrant as Record<string, unknown>).leaseBinding as Record<string, unknown>
-    ).instanceGeneration = 2;
+    ).generation = 2;
     expectReject(generation);
 
     const remoteWithoutLease = copy(fixture());
@@ -538,7 +539,7 @@ describe("Greenfield Agent OS v1 contract", () => {
       kind: "remote",
       leaseId: "lease.demo",
       epoch: "lease-epoch:current",
-      instanceGeneration: 1,
+      generation: 1,
       scope: ["workspace.read"],
       notBefore: "2026-08-05T00:00:00.000Z",
       expiresAt: "2026-08-05T00:10:00.000Z",

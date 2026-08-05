@@ -60,7 +60,8 @@ export interface RemoteLeaseBinding {
   readonly kind: "remote";
   readonly leaseId: string;
   readonly epoch: LeaseEpochRef;
-  readonly instanceGeneration: number;
+  /** ExecutionInstance.generation 的复制 pin，不是新的 lease authority generation。 */
+  readonly generation: number;
   readonly scope: readonly string[];
   readonly notBefore: string;
   readonly expiresAt: string;
