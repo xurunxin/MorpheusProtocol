@@ -9,12 +9,18 @@ import {
   createCapabilityPackageDescriptorDigest,
   classifyAgentOsV1PersonalState,
   parseAgentOsV1ActiveRunPin,
+  parseAgentOsV1ActiveRunPins,
   parseAgentOsV1AuthorityRequestEnvelope,
   parseAgentOsV1Contract,
   parseAgentOsV1HandlerCatalogSnapshot,
+  parseAgentOsV1HandlerTransitionCommand,
   parseAgentOsV1HandshakeOffer,
   parseAgentOsV1HandshakePeer,
+  parseAgentOsV1NegotiatedSnapshot,
+  parseAgentOsV1PersonalTransitionCommand,
   parseAgentOsV1ProtocolOffer,
+  parseAgentOsV1ReferenceRequest,
+  parseAgentOsV1ReferenceResponse,
 } from "../src/agent-os-v1-contract.js";
 import type {
   AgentOsV1Contract,
@@ -635,6 +641,108 @@ describe("Agent OS v1 strict reference DTO codecs", () => {
       handlerVersion: "handler-1.1.0",
     });
     expect(Object.isFrozen(pin.selectedFeatures)).toBe(true);
+  });
+
+  test("uses one strict authority for negotiated snapshots, transition commands and reference correlation", () => {
+    const snapshot = {
+      protocolId: "execution.v1",
+      selectedVersion: "1.1",
+      selectedFeatures: ["recover"],
+      schemaVersion: "agent-os/v1",
+      handlerVersion: "handler-1.1.0",
+    };
+    expect(parseAgentOsV1NegotiatedSnapshot(snapshot)).toEqual(snapshot);
+    expect(() => parseAgentOsV1NegotiatedSnapshot({ ...snapshot, selectedVersion: "2.0" })).toThrow(
+      AgentOsV1ContractError
+    );
+    expect(() =>
+      parseAgentOsV1NegotiatedSnapshot({
+        ...snapshot,
+        selectedFeatures: ["recover", "recover"],
+      })
+    ).toThrow(AgentOsV1ContractError);
+
+    const pin = { runId: "run-0001", ...snapshot };
+    expect(parseAgentOsV1ActiveRunPins([pin])).toEqual([pin]);
+    expect(() => parseAgentOsV1ActiveRunPins([pin, pin])).toThrow(AgentOsV1ContractError);
+    expect(() => parseAgentOsV1ActiveRunPins(new Array(1))).toThrow(AgentOsV1ContractError);
+    expect(
+      parseAgentOsV1HandlerTransitionCommand({
+        action: "drain",
+        protocolId: "execution.v1",
+        handlerVersion: "handler-1.1.0",
+      })
+    ).toEqual({
+      action: "drain",
+      protocolId: "execution.v1",
+      handlerVersion: "handler-1.1.0",
+    });
+    expect(() =>
+      parseAgentOsV1HandlerTransitionCommand({
+        action: "future",
+        protocolId: "execution.v1",
+        handlerVersion: "handler-1.1.0",
+      })
+    ).toThrow(AgentOsV1ContractError);
+    expect(() =>
+      parseAgentOsV1PersonalTransitionCommand({
+        from: "ManagedOffline",
+        to: "ManagedOnline",
+        authorityDomainChanged: false,
+        renewRemoteAuthority: "false",
+        autoRecover: false,
+      })
+    ).toThrow(AgentOsV1ContractError);
+
+    const parsePayload = (input: unknown) => {
+      if (
+        input === null ||
+        typeof input !== "object" ||
+        Array.isArray(input) ||
+        Object.getPrototypeOf(input) !== Object.prototype ||
+        Object.keys(input).length !== 1 ||
+        typeof Reflect.get(input, "value") !== "string"
+      )
+        throw new AgentOsV1ContractError("INVALID_SHAPE", "payload is invalid");
+      return Object.freeze({ value: Reflect.get(input, "value") as string });
+    };
+    const request = parseAgentOsV1ReferenceRequest(
+      {
+        protocolId: "execution.v1",
+        operation: "invoke",
+        envelope: authorityEnvelope(),
+        snapshot,
+        payload: { value: "request" },
+      },
+      parsePayload
+    );
+    expect(Object.isFrozen(request.payload)).toBe(true);
+    expect(
+      parseAgentOsV1ReferenceResponse(
+        {
+          protocolId: "execution.v1",
+          requestId: "request-0001",
+          status: "ok",
+          payload: { value: "response" },
+        },
+        "execution.v1",
+        "request-0001",
+        parsePayload
+      ).payload
+    ).toEqual({ value: "response" });
+    expect(() =>
+      parseAgentOsV1ReferenceResponse(
+        {
+          protocolId: "control.v1",
+          requestId: "request-0001",
+          status: "ok",
+          payload: { value: "response" },
+        },
+        "execution.v1",
+        "request-0001",
+        parsePayload
+      )
+    ).toThrow(AgentOsV1ContractError);
   });
 
   test("rejects unknown families, malformed versions, missing required features and authority smuggling", () => {

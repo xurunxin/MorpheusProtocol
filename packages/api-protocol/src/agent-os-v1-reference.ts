@@ -1,30 +1,31 @@
 import {
+  AGENT_OS_V1_PROTOCOL_REGISTRY,
   AgentOsV1ContractError,
   parseAgentOsV1ActiveRunPin,
-  parseAgentOsV1AuthorityRequestEnvelope,
+  parseAgentOsV1ActiveRunPins,
   parseAgentOsV1HandlerCatalogSnapshot,
+  parseAgentOsV1HandlerTransitionCommand,
   parseAgentOsV1HandshakeOffer,
+  parseAgentOsV1PersonalTransitionCommand,
+  parseAgentOsV1ReferenceRequest,
+  parseAgentOsV1ReferenceResponse,
 } from "./agent-os-v1-contract.js";
 import type {
   AgentOsV1ActiveRunPin,
-  AgentOsV1AuthorityRequestEnvelope,
   AgentOsV1HandlerCatalogEntry,
   AgentOsV1HandlerCatalogSnapshot,
   AgentOsV1HandshakeOffer,
   AgentOsV1NegotiatedSnapshot,
   AgentOsV1ProtocolFamily,
   AgentOsV1ProtocolVersion,
+  AgentOsV1ReferenceRequest,
+  AgentOsV1ReferenceResponse,
   AgentOsV1RejectionReason,
   AgentOsV1UpdateReason,
   PersonalHostState,
 } from "./agent-os-v1-types.js";
 
-export const AGENT_OS_V1_PROTOCOL_REGISTRY = deepFreeze({
-  "execution.v1": ["1.0", "1.1"],
-  "deployment.v1": ["1.0", "1.1"],
-  "control.v1": ["1.0", "1.1"],
-  "personal-local.v1": ["1.0", "1.1"],
-} satisfies Readonly<Record<AgentOsV1ProtocolFamily, readonly AgentOsV1ProtocolVersion[]>>);
+export { AGENT_OS_V1_PROTOCOL_REGISTRY };
 
 export type AgentOsV1HandshakeResult =
   | Readonly<{ status: "accepted"; snapshot: Readonly<AgentOsV1NegotiatedSnapshot> }>
@@ -89,24 +90,16 @@ export function negotiateAgentOsV1Handshake(
   });
 }
 
-export interface AgentOsV1ReferenceRequest<TPayload> {
-  readonly protocolId: AgentOsV1ProtocolFamily;
-  readonly operation: string;
-  readonly envelope: Readonly<AgentOsV1AuthorityRequestEnvelope>;
-  readonly snapshot: Readonly<AgentOsV1NegotiatedSnapshot>;
-  readonly payload: TPayload;
-}
-
-export interface AgentOsV1ReferenceResponse<TPayload> {
-  readonly protocolId: AgentOsV1ProtocolFamily;
-  readonly requestId: string;
-  readonly status: "ok";
-  readonly payload: TPayload;
-}
-
-export type AgentOsV1ReferenceTransport<TRequest, TResponse> = (
+export type AgentOsV1ReferenceTransport<TRequest> = (
   request: Readonly<AgentOsV1ReferenceRequest<TRequest>>
-) => Promise<Readonly<AgentOsV1ReferenceResponse<TResponse>>>;
+) => Promise<unknown>;
+
+export interface AgentOsV1ReferenceCodecs<TRequest, TResponse> {
+  /** 必须 strict parse/copy/freeze family payload；不得返回原始未验证输入。 */
+  readonly request: (input: unknown) => TRequest;
+  /** 必须 strict parse/copy/freeze family payload；不得返回原始未验证输入。 */
+  readonly response: (input: unknown) => TResponse;
+}
 
 export interface AgentOsV1ReferenceClient<
   TProtocol extends AgentOsV1ProtocolFamily,
@@ -117,7 +110,7 @@ export interface AgentOsV1ReferenceClient<
   readonly request: (
     operation: string,
     envelope: unknown,
-    snapshot: Readonly<AgentOsV1NegotiatedSnapshot>,
+    snapshot: unknown,
     payload: TRequest,
     nowEpochMs: number
   ) => Promise<Readonly<AgentOsV1ReferenceResponse<TResponse>>>;
@@ -130,23 +123,29 @@ export function createAgentOsV1ReferenceClient<
   TResponse,
 >(
   protocolId: TProtocol,
-  transport: AgentOsV1ReferenceTransport<TRequest, TResponse>
+  transport: AgentOsV1ReferenceTransport<TRequest>,
+  codecs: Readonly<AgentOsV1ReferenceCodecs<TRequest, TResponse>>
 ): AgentOsV1ReferenceClient<TProtocol, TRequest, TResponse> {
+  assertProtocolFamily(protocolId);
   return deepFreeze({
     protocolId,
     request: async (
       operation: string,
       envelopeInput: unknown,
-      snapshot: Readonly<AgentOsV1NegotiatedSnapshot>,
+      snapshotInput: unknown,
       payload: TRequest,
       nowEpochMs: number
     ) => {
-      const envelope = parseAgentOsV1AuthorityRequestEnvelope(envelopeInput);
-      assertOperation(operation);
-      assertSnapshotForProtocol(snapshot, protocolId);
-      assertLiveDeadline(envelope.deadline, nowEpochMs);
-      return transport(
-        deepFreeze({ protocolId, operation, envelope, snapshot: deepFreezeCopy(snapshot), payload })
+      const request = parseAgentOsV1ReferenceRequest(
+        { protocolId, operation, envelope: envelopeInput, snapshot: snapshotInput, payload },
+        codecs.request
+      );
+      assertLiveDeadline(request.envelope.deadline, nowEpochMs);
+      return parseAgentOsV1ReferenceResponse(
+        await transport(request),
+        protocolId,
+        request.envelope.requestId,
+        codecs.response
       );
     },
   });
@@ -161,18 +160,18 @@ export interface AgentOsV1ReferenceHandler<TRequest, TResponse> {
 
 /** provider dispatch 完全由 owner-provided catalog、pin 与 handler table 驱动。 */
 export async function dispatchAgentOsV1Reference<TRequest, TResponse>(
-  request: Readonly<AgentOsV1ReferenceRequest<TRequest>>,
+  requestInput: unknown,
   catalogInput: unknown,
   activePinInput: unknown,
-  handlers: readonly AgentOsV1ReferenceHandler<TRequest, TResponse>[],
-  nowEpochMs: number
+  handlersInput: unknown,
+  nowEpochMs: number,
+  codecs: Readonly<AgentOsV1ReferenceCodecs<TRequest, TResponse>>
 ): Promise<Readonly<AgentOsV1ReferenceResponse<TResponse>>> {
-  const envelope = parseAgentOsV1AuthorityRequestEnvelope(request.envelope);
+  const request = parseAgentOsV1ReferenceRequest(requestInput, codecs.request);
   const catalog = parseAgentOsV1HandlerCatalogSnapshot(catalogInput);
   const activePin = parseAgentOsV1ActiveRunPin(activePinInput);
-  assertOperation(request.operation);
-  assertSnapshotForProtocol(request.snapshot, request.protocolId);
-  assertLiveDeadline(envelope.deadline, nowEpochMs);
+  const handlers = parseOwnerHandlers<TRequest, TResponse>(handlersInput);
+  assertLiveDeadline(request.envelope.deadline, nowEpochMs);
   if (!sameSnapshot(request.snapshot, activePin))
     throw new AgentOsV1ReferenceError(
       "PIN_DRIFT",
@@ -186,24 +185,34 @@ export async function dispatchAgentOsV1Reference<TRequest, TResponse>(
       "UNKNOWN_OPERATION",
       "operation is absent from the pinned catalog"
     );
-  const handler = handlers.find(
+  const matchingHandlers = handlers.filter(
     (candidate) =>
       candidate.protocolId === request.protocolId &&
       candidate.handlerVersion === activePin.handlerVersion &&
       candidate.operation === request.operation
   );
-  if (handler === undefined)
+  if (matchingHandlers.length !== 1)
     throw new AgentOsV1ReferenceError(
       "UPDATE_REQUIRED",
-      "owner did not provide the pinned handler"
+      matchingHandlers.length === 0
+        ? "owner did not provide the pinned handler"
+        : "owner provided duplicate pinned handlers"
     );
+  const handler = matchingHandlers[0];
+  if (handler === undefined)
+    throw new AgentOsV1ReferenceError("UPDATE_REQUIRED", "pinned handler resolution failed");
   const payload = await handler.handle(request.payload);
-  return deepFreeze({
-    protocolId: request.protocolId,
-    requestId: envelope.requestId,
-    status: "ok",
-    payload,
-  });
+  return parseAgentOsV1ReferenceResponse(
+    {
+      protocolId: request.protocolId,
+      requestId: request.envelope.requestId,
+      status: "ok",
+      payload,
+    },
+    request.protocolId,
+    request.envelope.requestId,
+    codecs.response
+  );
 }
 
 export type AgentOsV1HandlerResolution =
@@ -231,15 +240,12 @@ export type AgentOsV1HandlerTransitionResult =
 
 export function planAgentOsV1HandlerTransition(
   catalogInput: unknown,
-  activePinInputs: readonly unknown[],
-  command: Readonly<{
-    action: "drain" | "unload";
-    protocolId: AgentOsV1ProtocolFamily;
-    handlerVersion: string;
-  }>
+  activePinInputs: unknown,
+  commandInput: unknown
 ): AgentOsV1HandlerTransitionResult {
   const catalog = parseAgentOsV1HandlerCatalogSnapshot(catalogInput);
-  const activePins = activePinInputs.map((input) => parseAgentOsV1ActiveRunPin(input));
+  const activePins = parseAgentOsV1ActiveRunPins(activePinInputs);
+  const command = parseAgentOsV1HandlerTransitionCommand(commandInput);
   const index = catalog.handlers.findIndex(
     (handler) =>
       handler.protocolId === command.protocolId && handler.handlerVersion === command.handlerVersion
@@ -250,6 +256,8 @@ export function planAgentOsV1HandlerTransition(
   );
   if (command.action === "unload" && pinned)
     return updateResult("UPDATE_REQUIRED", "HANDLER_PINNED");
+  if (catalog.revision === Number.MAX_SAFE_INTEGER)
+    throw new AgentOsV1ReferenceError("INVALID_INPUT", "handler catalog revision is exhausted");
 
   const handlers = catalog.handlers.flatMap((handler, handlerIndex) => {
     if (handlerIndex !== index) return [handler];
@@ -283,14 +291,14 @@ const PERSONAL_TRANSITIONS = deepFreeze({
 
 /** Personal 状态转换只返回计划，不写 Host state。 */
 export function planAgentOsV1PersonalTransition(
-  input: Readonly<{
-    from: PersonalHostState;
-    to: PersonalHostState;
-    authorityDomainChanged: boolean;
-    renewRemoteAuthority: boolean;
-    autoRecover: boolean;
-  }>
+  inputValue: unknown
 ): AgentOsV1PersonalTransitionResult {
+  const input = parseAgentOsV1PersonalTransitionCommand(inputValue);
+  if (input.from === "Revoked") {
+    return input.autoRecover
+      ? updateResult("rejected", "REVOKED_AUTO_RECOVERY_DENIED")
+      : updateResult("rejected", "INVALID_TRANSITION");
+  }
   if (input.authorityDomainChanged)
     return deepFreeze({
       status: "migration_required",
@@ -298,8 +306,6 @@ export function planAgentOsV1PersonalTransition(
     });
   if (input.from === "ManagedOffline" && input.renewRemoteAuthority)
     return updateResult("rejected", "REMOTE_RENEWAL_DENIED");
-  if (input.from === "Revoked" && input.autoRecover)
-    return updateResult("rejected", "REVOKED_AUTO_RECOVERY_DENIED");
   const allowedTransitions: readonly PersonalHostState[] = PERSONAL_TRANSITIONS[input.from];
   if (!allowedTransitions.includes(input.to)) return updateResult("rejected", "INVALID_TRANSITION");
   return deepFreeze({ status: "accepted", state: input.to });
@@ -318,6 +324,110 @@ export class AgentOsV1ReferenceError extends Error {
     super(message);
     this.name = "AgentOsV1ReferenceError";
   }
+}
+
+function parseOwnerHandlers<TRequest, TResponse>(
+  input: unknown
+): readonly AgentOsV1ReferenceHandler<TRequest, TResponse>[] {
+  const handlers = strictArrayValues(input, "owner handlers").map((entry) => {
+    const value = strictRecord(entry, "owner handler");
+    exactKeys(value, ["protocolId", "handlerVersion", "operation", "handle"], "owner handler");
+    const handle = value.handle;
+    if (typeof handle !== "function")
+      throw new AgentOsV1ReferenceError("INVALID_INPUT", "owner handler handle must be a function");
+    return Object.freeze({
+      protocolId: protocolFamilyValue(value.protocolId),
+      handlerVersion: identifierValue(value.handlerVersion, "owner handler handlerVersion"),
+      operation: identifierValue(value.operation, "owner handler operation"),
+      handle: handle as AgentOsV1ReferenceHandler<TRequest, TResponse>["handle"],
+    });
+  });
+  const identities = handlers.map(
+    (handler) => `${handler.protocolId}:${handler.handlerVersion}:${handler.operation}`
+  );
+  if (new Set(identities).size !== identities.length)
+    throw new AgentOsV1ReferenceError("INVALID_INPUT", "owner handlers contain duplicate keys");
+  return deepFreeze(handlers);
+}
+
+function protocolFamilyValue(value: unknown): AgentOsV1ProtocolFamily {
+  assertProtocolFamily(value);
+  return value;
+}
+
+function identifierValue(value: unknown, label: string): string {
+  if (typeof value !== "string" || !/^[a-z][a-z0-9._/-]{0,127}$/u.test(value))
+    throw new AgentOsV1ReferenceError("INVALID_INPUT", `${label} is invalid`);
+  return value;
+}
+
+function strictArrayValues(input: unknown, label: string): readonly unknown[] {
+  if (!Array.isArray(input) || Object.getPrototypeOf(input) !== Array.prototype)
+    throw new AgentOsV1ReferenceError("INVALID_INPUT", `${label} must be a plain array`);
+  if (Object.getOwnPropertySymbols(input).length !== 0)
+    throw new AgentOsV1ReferenceError("INVALID_INPUT", `${label} must not contain symbols`);
+  const descriptors = Object.getOwnPropertyDescriptors(input);
+  const result: unknown[] = [];
+  for (let index = 0; index < input.length; index += 1) {
+    const descriptor = descriptors[String(index)];
+    if (
+      descriptor === undefined ||
+      !descriptor.enumerable ||
+      !("value" in descriptor) ||
+      descriptor.get !== undefined ||
+      descriptor.set !== undefined
+    )
+      throw new AgentOsV1ReferenceError(
+        "INVALID_INPUT",
+        `${label} must contain only enumerable data items without holes`
+      );
+    result.push(descriptor.value);
+  }
+  if (Object.keys(descriptors).some((key) => key !== "length" && !/^(?:0|[1-9][0-9]*)$/u.test(key)))
+    throw new AgentOsV1ReferenceError("INVALID_INPUT", `${label} contains non-index fields`);
+  return result;
+}
+
+function strictRecord(input: unknown, label: string): Record<string, unknown> {
+  if (
+    input === null ||
+    typeof input !== "object" ||
+    Array.isArray(input) ||
+    Object.getPrototypeOf(input) !== Object.prototype
+  )
+    throw new AgentOsV1ReferenceError("INVALID_INPUT", `${label} must be a plain object`);
+  if (Object.getOwnPropertySymbols(input).length !== 0)
+    throw new AgentOsV1ReferenceError("INVALID_INPUT", `${label} must not contain symbols`);
+  for (const [key, descriptor] of Object.entries(Object.getOwnPropertyDescriptors(input))) {
+    if (
+      !descriptor.enumerable ||
+      !("value" in descriptor) ||
+      descriptor.get !== undefined ||
+      descriptor.set !== undefined
+    )
+      throw new AgentOsV1ReferenceError(
+        "INVALID_INPUT",
+        `${label}.${key} must be an enumerable data field`
+      );
+  }
+  return input as Record<string, unknown>;
+}
+
+function exactKeys(
+  value: Record<string, unknown>,
+  expected: readonly string[],
+  label: string
+): void {
+  const keys = Object.keys(value);
+  if (
+    keys.length !== expected.length ||
+    keys.some((key) => !expected.includes(key)) ||
+    expected.some((key) => !(key in value))
+  )
+    throw new AgentOsV1ReferenceError(
+      "INVALID_INPUT",
+      `${label} contains unknown or missing fields`
+    );
 }
 
 function validatePeers(
@@ -366,20 +476,6 @@ function sameSnapshot(
   );
 }
 
-function assertSnapshotForProtocol(
-  snapshot: Readonly<AgentOsV1NegotiatedSnapshot>,
-  protocolId: AgentOsV1ProtocolFamily
-): void {
-  const registered: readonly AgentOsV1ProtocolVersion[] = AGENT_OS_V1_PROTOCOL_REGISTRY[protocolId];
-  if (snapshot.protocolId !== protocolId || !registered.includes(snapshot.selectedVersion))
-    throw new AgentOsV1ReferenceError(
-      "UPDATE_REQUIRED",
-      "snapshot protocol/version is not registered"
-    );
-  if (snapshot.schemaVersion !== "agent-os/v1")
-    throw new AgentOsV1ReferenceError("UPDATE_REQUIRED", "snapshot schemaVersion is unsupported");
-}
-
 function assertLiveDeadline(deadline: string, nowEpochMs: number): void {
   if (!Number.isSafeInteger(nowEpochMs) || nowEpochMs < 0)
     throw new AgentOsV1ReferenceError("INVALID_INPUT", "nowEpochMs must be non-negative");
@@ -387,9 +483,9 @@ function assertLiveDeadline(deadline: string, nowEpochMs: number): void {
     throw new AgentOsV1ReferenceError("DEADLINE_EXPIRED", "authority request deadline has expired");
 }
 
-function assertOperation(operation: string): void {
-  if (!/^[a-z][a-z0-9._/-]{0,127}$/u.test(operation))
-    throw new AgentOsV1ReferenceError("INVALID_INPUT", "operation is invalid");
+function assertProtocolFamily(value: unknown): asserts value is AgentOsV1ProtocolFamily {
+  if (typeof value !== "string" || !Object.hasOwn(AGENT_OS_V1_PROTOCOL_REGISTRY, value))
+    throw new AgentOsV1ReferenceError("INVALID_INPUT", "protocolId is not registered");
 }
 
 function majorOf(version: AgentOsV1ProtocolVersion): number {
@@ -414,15 +510,6 @@ function updateResult<TStatus extends "UPDATE_REQUIRED" | "rejected", TReason ex
   reason: TReason
 ): Readonly<{ status: TStatus; reason: TReason }> {
   return Object.freeze({ status, reason });
-}
-
-function deepFreezeCopy<T>(value: T): T {
-  if (value === null || typeof value !== "object") return value;
-  if (Array.isArray(value)) return deepFreeze(value.map((entry) => deepFreezeCopy(entry))) as T;
-  const copy = Object.fromEntries(
-    Object.entries(value).map(([key, entry]) => [key, deepFreezeCopy(entry)])
-  );
-  return deepFreeze(copy) as T;
 }
 
 function deepFreeze<T>(value: T): T {

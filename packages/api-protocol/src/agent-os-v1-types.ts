@@ -278,6 +278,35 @@ export interface AgentOsV1ActiveRunPin extends AgentOsV1NegotiatedSnapshot {
   readonly runId: string;
 }
 
+export interface AgentOsV1HandlerTransitionCommand {
+  readonly action: "drain" | "unload";
+  readonly protocolId: AgentOsV1ProtocolFamily;
+  readonly handlerVersion: string;
+}
+
+export interface AgentOsV1PersonalTransitionCommand {
+  readonly from: PersonalHostState;
+  readonly to: PersonalHostState;
+  readonly authorityDomainChanged: boolean;
+  readonly renewRemoteAuthority: boolean;
+  readonly autoRecover: boolean;
+}
+
+export interface AgentOsV1ReferenceRequest<TPayload> {
+  readonly protocolId: AgentOsV1ProtocolFamily;
+  readonly operation: string;
+  readonly envelope: Readonly<AgentOsV1AuthorityRequestEnvelope>;
+  readonly snapshot: Readonly<AgentOsV1NegotiatedSnapshot>;
+  readonly payload: TPayload;
+}
+
+export interface AgentOsV1ReferenceResponse<TPayload> {
+  readonly protocolId: AgentOsV1ProtocolFamily;
+  readonly requestId: string;
+  readonly status: "ok";
+  readonly payload: TPayload;
+}
+
 /** 真实持久化由 Host owner 提供；本 DTO 仅表示严格探测结果。 */
 export interface AgentOsV1PersonalStateProbe {
   readonly schemaVersion: "personal-host/v1";

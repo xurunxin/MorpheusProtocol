@@ -6,6 +6,7 @@ import type {
   AgentOsV1NegotiatedSnapshot,
   AgentOsV1ProtocolFamily,
 } from "../src/agent-os-v1-types.js";
+import { AgentOsV1ContractError } from "../src/agent-os-v1-contract.js";
 import {
   AGENT_OS_V1_PROTOCOL_REGISTRY,
   AgentOsV1ReferenceError,
@@ -101,6 +102,40 @@ function catalog(snapshot: AgentOsV1NegotiatedSnapshot) {
     ],
   };
 }
+
+function strictRecord(input: unknown, key: string, valueType: "string" | "boolean") {
+  if (
+    input === null ||
+    typeof input !== "object" ||
+    Array.isArray(input) ||
+    Object.getPrototypeOf(input) !== Object.prototype
+  )
+    throw new Error("payload must be a plain object");
+  const descriptors = Object.getOwnPropertyDescriptors(input);
+  const keys = Object.keys(descriptors);
+  const descriptor = descriptors[key];
+  if (
+    keys.length !== 1 ||
+    keys[0] !== key ||
+    descriptor === undefined ||
+    !descriptor.enumerable ||
+    !("value" in descriptor) ||
+    typeof descriptor.value !== valueType
+  )
+    throw new Error("payload shape is invalid");
+  return Object.freeze({ [key]: descriptor.value });
+}
+
+const ECHO_CODECS = Object.freeze({
+  request: (input: unknown) =>
+    strictRecord(input, "value", "string") as Readonly<{ value: string }>,
+  response: (input: unknown) => strictRecord(input, "echo", "string") as Readonly<{ echo: string }>,
+});
+
+const OK_CODECS = Object.freeze({
+  request: (input: unknown) => strictRecord(input, "ok", "boolean") as Readonly<{ ok: boolean }>,
+  response: (input: unknown) => strictRecord(input, "ok", "boolean") as Readonly<{ ok: boolean }>,
+});
 
 describe("Agent OS v1 negotiation", () => {
   test("registers exactly four families and chooses the highest common minor with sorted features", () => {
@@ -252,13 +287,14 @@ describe("Agent OS v1 stateless clients and providers", () => {
               handle: (payload: Readonly<{ value: string }>) => ({ echo: payload.value }),
             },
           ],
-          NOW
+          NOW,
+          ECHO_CODECS
         );
       const client = createAgentOsV1ReferenceClient<
         typeof protocolId,
         Readonly<{ value: string }>,
         Readonly<{ echo: string }>
-      >(protocolId, transport);
+      >(protocolId, transport, ECHO_CODECS);
       await expect(
         client.request("invoke", authorityEnvelope(), snapshot, { value: protocolId }, NOW)
       ).resolves.toEqual({
@@ -278,7 +314,7 @@ describe("Agent OS v1 stateless clients and providers", () => {
       status: "ok" as const,
       payload: { ok: true },
     });
-    const client = createAgentOsV1ReferenceClient("execution.v1", transport);
+    const client = createAgentOsV1ReferenceClient("execution.v1", transport, OK_CODECS);
     await expect(
       client.request(
         "invoke",
@@ -301,7 +337,8 @@ describe("Agent OS v1 stateless clients and providers", () => {
         catalog(snapshot),
         activePin(snapshot),
         [],
-        NOW
+        NOW,
+        OK_CODECS
       )
     ).rejects.toMatchObject({ code: "PIN_DRIFT" });
     expect(
@@ -310,6 +347,98 @@ describe("Agent OS v1 stateless clients and providers", () => {
       status: "UPDATE_REQUIRED",
       reason: "HANDLER_MISSING",
     });
+  });
+
+  test("strictly parses snapshots, payloads, transport correlation and owner handler tables", async () => {
+    const snapshot = acceptedSnapshot("execution.v1");
+    let transportCalls = 0;
+    const forgedClient = createAgentOsV1ReferenceClient(
+      "execution.v1",
+      async () => {
+        transportCalls += 1;
+        return {
+          protocolId: "execution.v1",
+          requestId: "request-0001",
+          status: "ok",
+          payload: { ok: true },
+        };
+      },
+      OK_CODECS
+    );
+    await expect(
+      forgedClient.request(
+        "invoke",
+        authorityEnvelope(),
+        { ...snapshot, selectedFeatures: ["recover", "recover"] },
+        { ok: true },
+        NOW
+      )
+    ).rejects.toBeInstanceOf(AgentOsV1ContractError);
+    await expect(
+      forgedClient.request(
+        "invoke",
+        authorityEnvelope(),
+        { ...snapshot, handlerVersion: "handler-forged" },
+        Object.create({ ok: true }),
+        NOW
+      )
+    ).rejects.toThrow("payload must be a plain object");
+    expect(transportCalls).toBe(0);
+
+    for (const response of [
+      {
+        protocolId: "control.v1",
+        requestId: "request-0001",
+        status: "ok",
+        payload: { ok: true },
+      },
+      {
+        protocolId: "execution.v1",
+        requestId: "request-other",
+        status: "ok",
+        payload: { ok: true },
+      },
+      {
+        protocolId: "execution.v1",
+        requestId: "request-0001",
+        status: "ok",
+        payload: { ok: true },
+        extra: true,
+      },
+    ]) {
+      const client = createAgentOsV1ReferenceClient(
+        "execution.v1",
+        async () => response,
+        OK_CODECS
+      );
+      await expect(
+        client.request("invoke", authorityEnvelope(), snapshot, { ok: true }, NOW)
+      ).rejects.toBeInstanceOf(AgentOsV1ContractError);
+    }
+
+    const request = {
+      protocolId: "execution.v1",
+      operation: "invoke",
+      envelope: authorityEnvelope(),
+      snapshot,
+      payload: { ok: true },
+    };
+    const handler = {
+      protocolId: "execution.v1" as const,
+      handlerVersion: snapshot.handlerVersion,
+      operation: "invoke",
+      handle: () => ({ ok: true }),
+    };
+    await expect(
+      dispatchAgentOsV1Reference(
+        request,
+        catalog(snapshot),
+        activePin(snapshot),
+        [handler, handler],
+        NOW,
+        OK_CODECS
+      )
+    ).rejects.toMatchObject({ code: "INVALID_INPUT" });
   });
 });
 
@@ -341,6 +470,43 @@ describe("Agent OS v1 handler and Personal transitions", () => {
         handlerVersion: snapshot.handlerVersion,
       })
     ).toEqual({ status: "accepted", snapshot: { revision: 2, handlers: [] } });
+  });
+
+  test("rejects malformed commands, sparse or duplicate pins, unregistered pins and revision overflow", () => {
+    const snapshot = acceptedSnapshot("execution.v1");
+    const initial = catalog(snapshot);
+    const pin = activePin(snapshot);
+    expect(() =>
+      planAgentOsV1HandlerTransition(initial, [], {
+        action: "bogus",
+        protocolId: "execution.v1",
+        handlerVersion: snapshot.handlerVersion,
+      })
+    ).toThrow(AgentOsV1ContractError);
+    expect(() =>
+      planAgentOsV1HandlerTransition(initial, new Array(1), {
+        action: "unload",
+        protocolId: "execution.v1",
+        handlerVersion: snapshot.handlerVersion,
+      })
+    ).toThrow(AgentOsV1ContractError);
+    expect(() =>
+      planAgentOsV1HandlerTransition(initial, [pin, pin], {
+        action: "unload",
+        protocolId: "execution.v1",
+        handlerVersion: snapshot.handlerVersion,
+      })
+    ).toThrow(AgentOsV1ContractError);
+    expect(() =>
+      resolveAgentOsV1PinnedHandler(initial, { ...pin, selectedVersion: "2.0" })
+    ).toThrow(AgentOsV1ContractError);
+    expect(() =>
+      planAgentOsV1HandlerTransition({ ...initial, revision: Number.MAX_SAFE_INTEGER }, [], {
+        action: "drain",
+        protocolId: "execution.v1",
+        handlerVersion: snapshot.handlerVersion,
+      })
+    ).toThrow(AgentOsV1ReferenceError);
   });
 
   test("implements exactly the frozen Personal transitions and recovery denials", () => {
@@ -397,6 +563,31 @@ describe("Agent OS v1 handler and Personal transitions", () => {
         from: "LocalOnly",
         to: "ManagedOnline",
         authorityDomainChanged: false,
+        renewRemoteAuthority: false,
+        autoRecover: false,
+      })
+    ).toEqual({ status: "rejected", reason: "INVALID_TRANSITION" });
+    expect(() =>
+      planAgentOsV1PersonalTransition({
+        authorityDomainChanged: true,
+        renewRemoteAuthority: false,
+        autoRecover: false,
+      })
+    ).toThrow(AgentOsV1ContractError);
+    expect(() =>
+      planAgentOsV1PersonalTransition({
+        from: "ManagedOffline",
+        to: "ManagedOnline",
+        authorityDomainChanged: false,
+        renewRemoteAuthority: "false",
+        autoRecover: false,
+      })
+    ).toThrow(AgentOsV1ContractError);
+    expect(
+      planAgentOsV1PersonalTransition({
+        from: "Revoked",
+        to: "ManagedOnline",
+        authorityDomainChanged: true,
         renewRemoteAuthority: false,
         autoRecover: false,
       })
