@@ -7,7 +7,14 @@ import {
   canonicalAgentOsV1Source,
   createAgentDefinitionDigest,
   createCapabilityPackageDescriptorDigest,
+  classifyAgentOsV1PersonalState,
+  parseAgentOsV1ActiveRunPin,
+  parseAgentOsV1AuthorityRequestEnvelope,
   parseAgentOsV1Contract,
+  parseAgentOsV1HandlerCatalogSnapshot,
+  parseAgentOsV1HandshakeOffer,
+  parseAgentOsV1HandshakePeer,
+  parseAgentOsV1ProtocolOffer,
 } from "../src/agent-os-v1-contract.js";
 import type {
   AgentOsV1Contract,
@@ -574,5 +581,166 @@ describe("Greenfield Agent OS v1 contract", () => {
     (personal.agentDefinition as Record<string, unknown>).requestedScopes = ["workspace.write"];
     rebindDefinitionDigest(personal);
     expectReject(personal);
+  });
+});
+
+describe("Agent OS v1 strict reference DTO codecs", () => {
+  const authorityEnvelope = () => ({
+    requestId: "request-0001",
+    deadline: "2026-08-05T12:00:00.000Z",
+    expectedRevision: 7,
+    authorityEnvelopeRef: digestRef("authority:request-0001"),
+  });
+
+  const protocolOffer = () => ({
+    protocolId: "execution.v1",
+    versions: ["1.1", "1.0"],
+    features: ["recover", "cancel"],
+    requiredFeatures: ["recover"],
+    schemaVersion: "agent-os/v1",
+    handlerVersion: "handler-1.1.0",
+  });
+
+  test("canonicalizes and deeply freezes protocol offers, envelopes, catalogs and active pins", () => {
+    const offer = parseAgentOsV1ProtocolOffer(protocolOffer());
+    expect(offer.versions).toEqual(["1.0", "1.1"]);
+    expect(offer.features).toEqual(["cancel", "recover"]);
+    expect(Object.isFrozen(offer)).toBe(true);
+    expect(Object.isFrozen(offer.versions)).toBe(true);
+
+    const envelope = parseAgentOsV1AuthorityRequestEnvelope(authorityEnvelope());
+    expect(envelope.expectedRevision).toBe(7);
+    expect(Object.isFrozen(envelope.authorityEnvelopeRef)).toBe(true);
+
+    const catalog = parseAgentOsV1HandlerCatalogSnapshot({
+      revision: 3,
+      handlers: [
+        {
+          protocolId: "execution.v1",
+          handlerVersion: "handler-1.1.0",
+          lifecycle: "active",
+          operations: ["run", "cancel"],
+        },
+      ],
+    });
+    expect(catalog.handlers[0]?.operations).toEqual(["cancel", "run"]);
+    expect(Object.isFrozen(catalog.handlers)).toBe(true);
+
+    const pin = parseAgentOsV1ActiveRunPin({
+      runId: "run-0001",
+      protocolId: "execution.v1",
+      selectedVersion: "1.1",
+      selectedFeatures: ["recover"],
+      schemaVersion: "agent-os/v1",
+      handlerVersion: "handler-1.1.0",
+    });
+    expect(Object.isFrozen(pin.selectedFeatures)).toBe(true);
+  });
+
+  test("rejects unknown families, malformed versions, missing required features and authority smuggling", () => {
+    expect(() =>
+      parseAgentOsV1ProtocolOffer({ ...protocolOffer(), protocolId: "runtime.v0" })
+    ).toThrow(AgentOsV1ContractError);
+    expect(() => parseAgentOsV1ProtocolOffer({ ...protocolOffer(), versions: ["01.1"] })).toThrow(
+      AgentOsV1ContractError
+    );
+    expect(() =>
+      parseAgentOsV1ProtocolOffer({ ...protocolOffer(), requiredFeatures: ["artifact"] })
+    ).toThrow(AgentOsV1ContractError);
+    for (const field of ["secret", "token", "claims", "localPath", "traceparent", "baggage"]) {
+      expect(() =>
+        parseAgentOsV1AuthorityRequestEnvelope({ ...authorityEnvelope(), [field]: "forbidden" })
+      ).toThrow(AgentOsV1ContractError);
+    }
+    expect(() =>
+      parseAgentOsV1AuthorityRequestEnvelope({
+        ...authorityEnvelope(),
+        deadline: "2026-08-05T12:00:00Z",
+      })
+    ).toThrow(AgentOsV1ContractError);
+    expect(() =>
+      parseAgentOsV1AuthorityRequestEnvelope({
+        ...authorityEnvelope(),
+        expectedRevision: Number.MAX_SAFE_INTEGER + 1,
+      })
+    ).toThrow(AgentOsV1ContractError);
+  });
+
+  test("enforces Host identity and keeps Control outside HostKind", () => {
+    const control = parseAgentOsV1HandshakePeer({
+      peerId: "control-0001",
+      role: "control",
+      hostKind: null,
+      managementMode: null,
+      tenantId: "tenant.demo",
+      workloadId: "workload.demo",
+      authorityDomain: "authority.demo",
+      enrollmentRef: null,
+      audience: ["worker-0001"],
+    });
+    expect(control.hostKind).toBeNull();
+    expect(() => parseAgentOsV1HandshakePeer({ ...control, hostKind: "worker" })).toThrow(
+      AgentOsV1ContractError
+    );
+
+    const personal = parseAgentOsV1HandshakePeer({
+      peerId: "personal-0001",
+      role: "personal",
+      hostKind: "personal",
+      managementMode: "enrolled",
+      tenantId: "tenant.demo",
+      workloadId: "workload.demo",
+      authorityDomain: "authority.demo",
+      enrollmentRef: digestRef("enrollment:personal-0001"),
+      audience: ["control-0001"],
+    });
+    expect(personal.managementMode).toBe("enrolled");
+    expect(() => parseAgentOsV1HandshakePeer({ ...personal, enrollmentRef: null })).toThrow(
+      AgentOsV1ContractError
+    );
+
+    const handshake = parseAgentOsV1HandshakeOffer({
+      protocol: protocolOffer(),
+      peer: personal,
+      issuedAt: "2026-08-05T11:59:59.000Z",
+      maxClockSkewMs: 30_000,
+    });
+    expect(handshake.protocol.protocolId).toBe("execution.v1");
+  });
+
+  test("classifies clean, recognized legacy, unknown and corrupt state without fallback", () => {
+    expect(
+      classifyAgentOsV1PersonalState({
+        schemaVersion: "personal-host/v1",
+        state: "ManagedOffline",
+        authorityDomain: "authority.demo",
+        generation: 4,
+      })
+    ).toEqual({
+      classification: "clean",
+      state: {
+        schemaVersion: "personal-host/v1",
+        state: "ManagedOffline",
+        authorityDomain: "authority.demo",
+        generation: 4,
+      },
+      allowedActions: ["serve"],
+    });
+    expect(classifyAgentOsV1PersonalState({ schemaVersion: "personal-host/v0" })).toEqual({
+      classification: "recognized-legacy",
+      state: null,
+      allowedActions: ["read-only-export", "quarantine", "explicit-reset"],
+    });
+    expect(classifyAgentOsV1PersonalState({ schemaVersion: "foreign/v9" }).classification).toBe(
+      "unknown"
+    );
+    expect(
+      classifyAgentOsV1PersonalState({
+        schemaVersion: "personal-host/v1",
+        state: "ManagedOffline",
+        authorityDomain: "authority.demo",
+        generation: -1,
+      }).classification
+    ).toBe("corrupt");
   });
 });
