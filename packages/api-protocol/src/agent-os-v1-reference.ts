@@ -2,19 +2,24 @@ import {
   AGENT_OS_V1_PROTOCOL_REGISTRY,
   AgentOsV1ContractError,
   assertAgentOsV1CanonicalPromptSemanticBinding,
+  parseAgentOsV1AppLifecycleState,
   parseAgentOsV1ActiveRunPin,
   parseAgentOsV1ActiveRunPins,
+  parseAgentOsV1AuthorityRequestEnvelope,
   parseAgentOsV1CanonicalPromptRequest,
   parseAgentOsV1CanonicalPromptResponse,
   parseAgentOsV1HandlerCatalogSnapshot,
   parseAgentOsV1HandlerTransitionCommand,
   parseAgentOsV1HandshakeOffer,
+  parseAgentOsV1ExecutionGrant,
+  parseAgentOsV1ExecutionInstance,
   parseAgentOsV1PersonalTransitionCommand,
   parseAgentOsV1ReferenceRequest,
   parseAgentOsV1ReferenceResponse,
 } from "./agent-os-v1-contract.js";
 import type {
   AgentOsV1ActiveRunPin,
+  AgentOsV1AuthorityRequestEnvelope,
   AgentOsV1CanonicalPromptCancelRequest,
   AgentOsV1CanonicalPromptReadRequest,
   AgentOsV1CanonicalPromptRequest,
@@ -23,6 +28,7 @@ import type {
   AgentOsV1HandlerCatalogEntry,
   AgentOsV1HandlerCatalogSnapshot,
   AgentOsV1HandshakeOffer,
+  AgentOsV1AppLifecycleState,
   AgentOsV1NegotiatedSnapshot,
   AgentOsV1ProtocolFamily,
   AgentOsV1ProtocolVersion,
@@ -94,6 +100,169 @@ export function negotiateAgentOsV1Handshake(
       selectedFeatures,
       schemaVersion: "agent-os/v1",
       handlerVersion: provider.protocol.handlerVersion,
+    },
+  });
+}
+
+export type AgentOsV1ImmutablePromptReferenceEnvelopeKind = "start" | "cancel";
+
+/**
+ * Terminal packed consumer 的 immutable strict reference artifact。
+ * 它只保存固定、过期即失效的 no-live-issuer fixture facts；不可续期、轮换或携带 credential。
+ */
+export const AGENT_OS_V1_IMMUTABLE_PROMPT_REFERENCE_ARTIFACT = createImmutablePromptArtifact();
+
+/** 只把 prompt-specific semantic digest 绑定到上述固定 envelope facts。 */
+export function bindAgentOsV1ImmutablePromptReferenceEnvelope(
+  kind: AgentOsV1ImmutablePromptReferenceEnvelopeKind,
+  authorityEnvelopeRef: unknown
+): Readonly<AgentOsV1AuthorityRequestEnvelope> {
+  const envelope = AGENT_OS_V1_IMMUTABLE_PROMPT_REFERENCE_ARTIFACT.envelopes[kind];
+  return parseAgentOsV1AuthorityRequestEnvelope({ ...envelope, authorityEnvelopeRef });
+}
+
+function createImmutablePromptArtifact() {
+  const nowText = "2026-08-06T00:00:00.000Z";
+  const nowEpochMs = Date.parse(nowText);
+  const clientOffer = parseAgentOsV1HandshakeOffer({
+    protocol: {
+      protocolId: "execution.v1",
+      versions: ["1.1"],
+      features: ["recover"],
+      requiredFeatures: ["recover"],
+      schemaVersion: "agent-os/v1",
+      handlerVersion: "handler-execution-1.1.0",
+    },
+    peer: {
+      peerId: "terminal.execution",
+      role: "app",
+      hostKind: null,
+      managementMode: null,
+      tenantId: "tenant.terminal.fixture",
+      workloadId: "workload.terminal.fixture",
+      authorityDomain: "authority.terminal.fixture",
+      enrollmentRef: null,
+      audience: ["kernel.execution"],
+    },
+    issuedAt: nowText,
+    maxClockSkewMs: 30_000,
+  } satisfies AgentOsV1HandshakeOffer);
+  const providerOffer = parseAgentOsV1HandshakeOffer({
+    protocol: {
+      protocolId: "execution.v1",
+      versions: ["1.1"],
+      features: ["recover"],
+      requiredFeatures: ["recover"],
+      schemaVersion: "agent-os/v1",
+      handlerVersion: "handler-execution-1.1.0",
+    },
+    peer: {
+      peerId: "kernel.execution",
+      role: "kernel",
+      hostKind: null,
+      managementMode: null,
+      tenantId: "tenant.terminal.fixture",
+      workloadId: "workload.terminal.fixture",
+      authorityDomain: "authority.terminal.fixture",
+      enrollmentRef: null,
+      audience: ["terminal.execution"],
+    },
+    issuedAt: nowText,
+    maxClockSkewMs: 30_000,
+  } satisfies AgentOsV1HandshakeOffer);
+  const negotiation = negotiateAgentOsV1Handshake(clientOffer, providerOffer, nowEpochMs);
+  if (negotiation.status !== "accepted") {
+    throw new AgentOsV1ReferenceError(
+      "INVALID_INPUT",
+      `immutable prompt reference fixture handshake failed: ${negotiation.reason}`
+    );
+  }
+  const definitionDigest = `sha256:${"1".repeat(64)}`;
+  const policyDigest = `sha256:${"2".repeat(64)}`;
+  const capabilityDigest = `sha256:${"3".repeat(64)}`;
+  const grant = parseAgentOsV1ExecutionGrant({
+    grantId: "grant.terminal.fixture",
+    kind: "remote",
+    issuer: "reference-fixture.invalid",
+    audience: ["kernel.execution"],
+    authorityDomain: "authority.terminal.fixture",
+    hostId: "host.terminal.fixture",
+    deploymentId: "deployment.terminal.fixture",
+    runId: "run.terminal.fixture",
+    tenantId: "tenant.terminal.fixture",
+    workloadId: "workload.terminal.fixture",
+    attemptId: "attempt.terminal.fixture",
+    instanceId: "instance.terminal.fixture",
+    definitionDigest,
+    policyDigest,
+    capabilityDigest,
+    keyId: "grant-key.terminal.fixture",
+    rotationGeneration: "rotation:terminal.fixture.fixed",
+    revocationGeneration: "revocation:terminal.fixture.fixed",
+    scope: ["prompt.execute"],
+    notBefore: "2026-08-05T23:59:00.000Z",
+    expiresAt: "2026-08-06T00:05:00.000Z",
+    sessionGrant: {
+      grantId: "session-grant.terminal.fixture",
+      principalId: "principal.terminal.fixture",
+      scope: ["prompt.execute"],
+      notBefore: "2026-08-05T23:59:00.000Z",
+      expiresAt: "2026-08-06T00:05:00.000Z",
+    },
+    leaseBinding: {
+      kind: "remote",
+      leaseId: "lease.terminal.fixture",
+      epoch: "lease-epoch:terminal.fixture.fixed",
+      generation: 1,
+      scope: ["prompt.execute"],
+      notBefore: "2026-08-05T23:59:00.000Z",
+      expiresAt: "2026-08-06T00:05:00.000Z",
+    },
+  });
+  const instance = parseAgentOsV1ExecutionInstance({
+    instanceId: "instance.terminal.fixture",
+    deploymentId: "deployment.terminal.fixture",
+    hostId: "host.terminal.fixture",
+    generation: 1,
+    deploymentRevision: "revision.terminal.fixture.fixed",
+    replicaOrdinal: 0,
+    observedState: "running",
+  });
+  const lifecycle: AgentOsV1AppLifecycleState =
+    parseAgentOsV1AppLifecycleState("connected-managed");
+  return deepFreeze({
+    artifactId: "artifact://DAR-479/terminal-immutable-reference-v1",
+    kind: "deterministic-no-effect" as const,
+    renewable: false as const,
+    rotatable: false as const,
+    liveIssuer: false as const,
+    clock: { nowText, nowEpochMs },
+    lifecycle,
+    handshake: { clientOffer, providerOffer, snapshot: negotiation.snapshot },
+    authority: {
+      grant,
+      instance,
+      runId: grant.runId,
+      attemptId: grant.attemptId,
+      instanceId: instance.instanceId,
+      turnId: "turn.terminal.fixture",
+      claimId: "claim.terminal.fixture",
+      claimFence: 1,
+      expectedRevision: 0,
+      storeGeneration: 1,
+      resultDigest: `sha256:${"4".repeat(64)}`,
+    },
+    envelopes: {
+      start: {
+        requestId: "request.terminal.fixture.start",
+        deadline: "2026-08-06T00:01:00.000Z",
+        expectedRevision: 0,
+      },
+      cancel: {
+        requestId: "request.terminal.fixture.cancel",
+        deadline: "2026-08-06T00:01:00.000Z",
+        expectedRevision: 0,
+      },
     },
   });
 }

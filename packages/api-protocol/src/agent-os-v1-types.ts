@@ -380,6 +380,183 @@ export interface AgentOsV1CanonicalPromptResponse {
   readonly replayed: boolean;
 }
 
+export type AgentOsV1AuthorityEpoch = `authority-epoch:${string}`;
+export type AgentOsV1AppLifecycleState =
+  | "first-run"
+  | "awaiting-consent"
+  | "offline-local"
+  | "connected-managed"
+  | "policy-stale"
+  | "revoked"
+  | "recovery-required";
+export type AgentOsV1AppCompatibility = "compatible" | "update-required";
+
+/** App 消费的原子投影页；事实仍由 canonical Prompt snapshot/cursor 提供。 */
+export interface AgentOsV1AppProjectionPage {
+  readonly schemaVersion: "agent-os-app-projection/v1";
+  readonly tenantId: string;
+  readonly authorityEpoch: AgentOsV1AuthorityEpoch;
+  readonly lifecycle: AgentOsV1AppLifecycleState;
+  readonly compatibility: AgentOsV1AppCompatibility;
+  readonly response: Readonly<AgentOsV1CanonicalPromptResponse>;
+}
+
+export type AgentOsV1TerminalExitCode = 0 | 1 | 2 | 64 | 69 | 77 | 130;
+export type AgentOsV1TerminalStatus =
+  | "succeeded"
+  | "failed"
+  | "usage-error"
+  | "cancelled"
+  | "recovery-required"
+  | "update-required"
+  | "unavailable"
+  | "auth-denied"
+  | "policy-denied";
+export type AgentOsV1TerminalFrame =
+  | Readonly<{
+      schemaVersion: "terminal-jsonl.v1";
+      requestId: string;
+      kind: "lifecycle";
+      sequence: number;
+      timestamp: string;
+      lifecycle: AgentOsV1AppLifecycleState;
+    }>
+  | Readonly<{
+      schemaVersion: "terminal-jsonl.v1";
+      requestId: string;
+      kind: "event";
+      sequence: number;
+      timestamp: string;
+      event: Readonly<AgentOsV1CanonicalPromptEvent>;
+    }>
+  | Readonly<{
+      schemaVersion: "terminal-jsonl.v1";
+      requestId: string;
+      kind: "error";
+      sequence: number;
+      timestamp: string;
+      code: string;
+      message: string;
+      retryable: boolean;
+    }>
+  | Readonly<{
+      schemaVersion: "terminal-jsonl.v1";
+      requestId: string;
+      kind: "terminal";
+      sequence: number;
+      timestamp: string;
+      runId: string | null;
+      status: AgentOsV1TerminalStatus;
+      exitCode: AgentOsV1TerminalExitCode;
+    }>;
+
+export type AgentOsV1DestructiveCommandRisk = "high" | "critical";
+
+export interface AgentOsV1DestructiveCommandIntent {
+  readonly schemaVersion: "agent-os-destructive-command/v1";
+  readonly tenantId: string;
+  readonly targets: readonly OpaqueRef[];
+  readonly commandId: string;
+  readonly operation: string;
+  readonly commandDigest: string;
+  readonly expectedRevision: number;
+  readonly idempotencyKey: OpaqueRef;
+  readonly risk: AgentOsV1DestructiveCommandRisk;
+  readonly reason: string;
+  readonly requestId: string;
+  readonly authority: Readonly<DigestRef>;
+}
+
+/** 只能由服务端或显式 deterministic fake 签发；App 不得生成或延长该引用。 */
+export interface AgentOsV1DestructiveCommandConfirmation {
+  readonly schemaVersion: "agent-os-destructive-command/v1";
+  readonly confirmationRef: OpaqueRef;
+  readonly stepUpRef: OpaqueRef;
+  readonly tenantId: string;
+  readonly targets: readonly OpaqueRef[];
+  readonly commandId: string;
+  readonly operation: string;
+  readonly commandDigest: string;
+  readonly expectedRevision: number;
+  readonly idempotencyKey: OpaqueRef;
+  readonly risk: AgentOsV1DestructiveCommandRisk;
+  readonly reason: string;
+  readonly requestId: string;
+  readonly authority: Readonly<DigestRef>;
+  readonly issuedAt: string;
+  readonly expiresAt: string;
+}
+
+export interface AgentOsV1DestructiveCommandStepUpProof {
+  readonly schemaVersion: "agent-os-destructive-command/v1";
+  readonly confirmationRef: OpaqueRef;
+  readonly stepUpRef: OpaqueRef;
+  readonly stepUpProofRef: OpaqueRef;
+  readonly tenantId: string;
+  readonly targets: readonly OpaqueRef[];
+  readonly commandId: string;
+  readonly operation: string;
+  readonly commandDigest: string;
+  readonly expectedRevision: number;
+  readonly idempotencyKey: OpaqueRef;
+  readonly risk: AgentOsV1DestructiveCommandRisk;
+  readonly reason: string;
+  readonly requestId: string;
+  readonly authority: Readonly<DigestRef>;
+  readonly completedAt: string;
+  readonly expiresAt: string;
+}
+
+export interface AgentOsV1DestructiveCommandSubmission {
+  readonly schemaVersion: "agent-os-destructive-command/v1";
+  readonly confirmationRef: OpaqueRef;
+  readonly stepUpRef: OpaqueRef;
+  readonly stepUpProofRef: OpaqueRef;
+  readonly tenantId: string;
+  readonly targets: readonly OpaqueRef[];
+  readonly commandId: string;
+  readonly operation: string;
+  readonly commandDigest: string;
+  readonly expectedRevision: number;
+  readonly idempotencyKey: OpaqueRef;
+  readonly risk: AgentOsV1DestructiveCommandRisk;
+  readonly reason: string;
+  readonly requestId: string;
+  readonly authority: Readonly<DigestRef>;
+  readonly submittedAt: string;
+}
+
+export type AgentOsV1DestructiveCommandRejection =
+  | "expired"
+  | "reused"
+  | "revoked"
+  | "cross-tenant"
+  | "step-up-mismatch"
+  | "revision-conflict"
+  | "intent-drift";
+
+/** DAR-479 reference journey 永不执行真实 effect，receipt 必须固定为 false。 */
+export interface AgentOsV1DestructiveCommandReceipt {
+  readonly schemaVersion: "agent-os-destructive-command/v1";
+  readonly receiptRef: OpaqueRef;
+  readonly confirmationRef: OpaqueRef;
+  readonly stepUpProofRef: OpaqueRef;
+  readonly tenantId: string;
+  readonly targets: readonly OpaqueRef[];
+  readonly commandId: string;
+  readonly operation: string;
+  readonly commandDigest: string;
+  readonly expectedRevision: number;
+  readonly idempotencyKey: OpaqueRef;
+  readonly risk: AgentOsV1DestructiveCommandRisk;
+  readonly commandReason: string;
+  readonly requestId: string;
+  readonly authority: Readonly<DigestRef>;
+  readonly status: "accepted-no-effect" | "rejected";
+  readonly reason: AgentOsV1DestructiveCommandRejection | null;
+  readonly effectPerformed: false;
+}
+
 /** 协商 offer 只描述协议能力，不拥有连接或 handler 生命周期。 */
 export interface AgentOsV1ProtocolOffer {
   readonly protocolId: AgentOsV1ProtocolFamily;

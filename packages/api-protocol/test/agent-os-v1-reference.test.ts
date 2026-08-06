@@ -15,8 +15,10 @@ import {
   createAgentOsV1CanonicalPromptSnapshot,
 } from "../src/agent-os-v1-contract.js";
 import {
+  AGENT_OS_V1_IMMUTABLE_PROMPT_REFERENCE_ARTIFACT,
   AGENT_OS_V1_PROTOCOL_REGISTRY,
   AgentOsV1ReferenceError,
+  bindAgentOsV1ImmutablePromptReferenceEnvelope,
   createAgentOsV1ReferenceClient,
   createAgentOsV1CanonicalPromptReferenceClient,
   dispatchAgentOsV1CanonicalPromptReference,
@@ -139,6 +141,39 @@ const ECHO_CODECS = Object.freeze({
   request: (input: unknown) =>
     strictRecord(input, "value", "string") as Readonly<{ value: string }>,
   response: (input: unknown) => strictRecord(input, "echo", "string") as Readonly<{ echo: string }>,
+});
+
+describe("Agent OS v1 immutable prompt reference artifact", () => {
+  test("is a deeply frozen strict no-live-issuer artifact with bind-only envelopes", () => {
+    const artifact = AGENT_OS_V1_IMMUTABLE_PROMPT_REFERENCE_ARTIFACT;
+    const envelopeRef = { ref: "authority:prompt-test", digest: digest("prompt-test") };
+    const envelope = bindAgentOsV1ImmutablePromptReferenceEnvelope("start", envelopeRef);
+
+    expect(artifact.kind).toBe("deterministic-no-effect");
+    expect(artifact.renewable).toBe(false);
+    expect(artifact.rotatable).toBe(false);
+    expect(artifact.liveIssuer).toBe(false);
+    expect(artifact.lifecycle).toBe("connected-managed");
+    expect(artifact.handshake.snapshot.protocolId).toBe("execution.v1");
+    expect(artifact.authority.grant.kind).toBe("remote");
+    expect(artifact.authority.instance.observedState).toBe("running");
+    expect(Object.isFrozen(artifact)).toBe(true);
+    expect(Object.isFrozen(artifact.authority.grant.sessionGrant)).toBe(true);
+    expect(Object.isFrozen(artifact.handshake.snapshot)).toBe(true);
+    expect(envelope).toEqual({
+      ...artifact.envelopes.start,
+      authorityEnvelopeRef: envelopeRef,
+    });
+    expect(JSON.stringify(artifact)).not.toMatch(
+      /credential|accessToken|refreshToken|clientSecret/i
+    );
+    expect(() =>
+      bindAgentOsV1ImmutablePromptReferenceEnvelope("start", {
+        ref: "authority:prompt-test",
+        digest: "not-a-digest",
+      })
+    ).toThrow(AgentOsV1ContractError);
+  });
 });
 
 describe("Agent OS v1 canonical prompt reference transport", () => {

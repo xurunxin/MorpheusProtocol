@@ -17,6 +17,20 @@ import type {
   AgentOsV1CanonicalPromptReadRequest,
   AgentOsV1CanonicalPromptRequest,
   AgentOsV1CanonicalPromptResponse,
+  AgentOsV1AppCompatibility,
+  AgentOsV1AppLifecycleState,
+  AgentOsV1AppProjectionPage,
+  AgentOsV1AuthorityEpoch,
+  AgentOsV1DestructiveCommandConfirmation,
+  AgentOsV1DestructiveCommandIntent,
+  AgentOsV1DestructiveCommandReceipt,
+  AgentOsV1DestructiveCommandRejection,
+  AgentOsV1DestructiveCommandRisk,
+  AgentOsV1DestructiveCommandStepUpProof,
+  AgentOsV1DestructiveCommandSubmission,
+  AgentOsV1TerminalExitCode,
+  AgentOsV1TerminalFrame,
+  AgentOsV1TerminalStatus,
   AgentOsV1HandlerCatalogEntry,
   AgentOsV1HandlerCatalogSnapshot,
   AgentOsV1HandlerTransitionCommand,
@@ -75,6 +89,20 @@ export type {
   AgentOsV1CanonicalPromptReadRequest,
   AgentOsV1CanonicalPromptRequest,
   AgentOsV1CanonicalPromptResponse,
+  AgentOsV1AppCompatibility,
+  AgentOsV1AppLifecycleState,
+  AgentOsV1AppProjectionPage,
+  AgentOsV1AuthorityEpoch,
+  AgentOsV1DestructiveCommandConfirmation,
+  AgentOsV1DestructiveCommandIntent,
+  AgentOsV1DestructiveCommandReceipt,
+  AgentOsV1DestructiveCommandRejection,
+  AgentOsV1DestructiveCommandRisk,
+  AgentOsV1DestructiveCommandStepUpProof,
+  AgentOsV1DestructiveCommandSubmission,
+  AgentOsV1TerminalExitCode,
+  AgentOsV1TerminalFrame,
+  AgentOsV1TerminalStatus,
   AgentOsV1HandlerCatalogEntry,
   AgentOsV1HandlerCatalogSnapshot,
   AgentOsV1HandlerTransitionCommand,
@@ -137,6 +165,7 @@ const LEASE_EPOCH_REF_PATTERN = /^lease-epoch:[a-z][a-z0-9._-]{0,127}$/u;
 const ROTATION_GENERATION_REF_PATTERN = /^rotation:[a-z][a-z0-9._-]{0,127}$/u;
 const REVOCATION_GENERATION_REF_PATTERN = /^revocation:[a-z][a-z0-9._-]{0,127}$/u;
 const PROMPT_STREAM_EPOCH_PATTERN = /^stream-epoch:[a-z][a-z0-9._-]{0,127}$/u;
+const AUTHORITY_EPOCH_PATTERN = /^authority-epoch:[a-z][a-z0-9._-]{0,127}$/u;
 const RFC3339_MILLIS_PATTERN =
   /^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}Z$/u;
 const PROTOCOL_VERSION_PATTERN = /^(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)$/u;
@@ -1171,6 +1200,359 @@ export function parseAgentOsV1CanonicalPromptResponse(
     events,
     cursor,
     replayed: booleanValue(value.replayed, "canonical prompt response replayed"),
+  });
+}
+
+export function parseAgentOsV1AppProjectionPage(
+  input: unknown
+): Readonly<AgentOsV1AppProjectionPage> {
+  const value = record(input, "App projection page");
+  exact(
+    value,
+    ["schemaVersion", "tenantId", "authorityEpoch", "lifecycle", "compatibility", "response"],
+    "App projection page"
+  );
+  if (value.schemaVersion !== "agent-os-app-projection/v1")
+    fail("UNSUPPORTED_VERSION", "App projection page schemaVersion is unsupported");
+  return deepFreeze({
+    schemaVersion: "agent-os-app-projection/v1",
+    tenantId: identifier(value.tenantId, "App projection page tenantId"),
+    authorityEpoch: authorityEpoch(value.authorityEpoch, "App projection page authorityEpoch"),
+    lifecycle: appLifecycle(value.lifecycle, "App projection page lifecycle"),
+    compatibility: appCompatibility(value.compatibility, "App projection page compatibility"),
+    response: parseAgentOsV1CanonicalPromptResponse(value.response),
+  });
+}
+
+/** 解析 owner 提供的 App lifecycle fact；handshake 与 cache 均不得自行推导该状态。 */
+export function parseAgentOsV1AppLifecycleState(input: unknown): AgentOsV1AppLifecycleState {
+  return appLifecycle(input, "App lifecycle fact");
+}
+
+export function parseAgentOsV1TerminalFrame(input: unknown): AgentOsV1TerminalFrame {
+  const value = record(input, "Terminal JSONL frame");
+  if (value.schemaVersion !== "terminal-jsonl.v1")
+    fail("UNSUPPORTED_VERSION", "Terminal JSONL frame schemaVersion is unsupported");
+  const requestId = identifier(value.requestId, "Terminal JSONL frame requestId");
+  const sequence = positiveInteger(value.sequence, "Terminal JSONL frame sequence");
+  const timestamp = instant(value.timestamp, "Terminal JSONL frame timestamp");
+  switch (value.kind) {
+    case "lifecycle":
+      exact(
+        value,
+        ["schemaVersion", "requestId", "kind", "sequence", "timestamp", "lifecycle"],
+        "Terminal lifecycle frame"
+      );
+      return deepFreeze({
+        schemaVersion: "terminal-jsonl.v1",
+        requestId,
+        kind: "lifecycle",
+        sequence,
+        timestamp,
+        lifecycle: appLifecycle(value.lifecycle, "Terminal lifecycle frame lifecycle"),
+      });
+    case "event":
+      exact(
+        value,
+        ["schemaVersion", "requestId", "kind", "sequence", "timestamp", "event"],
+        "Terminal event frame"
+      );
+      return deepFreeze({
+        schemaVersion: "terminal-jsonl.v1",
+        requestId,
+        kind: "event",
+        sequence,
+        timestamp,
+        event: parseAgentOsV1CanonicalPromptEvent(value.event),
+      });
+    case "error":
+      exact(
+        value,
+        [
+          "schemaVersion",
+          "requestId",
+          "kind",
+          "sequence",
+          "timestamp",
+          "code",
+          "message",
+          "retryable",
+        ],
+        "Terminal error frame"
+      );
+      return deepFreeze({
+        schemaVersion: "terminal-jsonl.v1",
+        requestId,
+        kind: "error",
+        sequence,
+        timestamp,
+        code: identifier(value.code, "Terminal error frame code"),
+        message: boundedUtf8String(value.message, "Terminal error frame message", 4_096),
+        retryable: booleanValue(value.retryable, "Terminal error frame retryable"),
+      });
+    case "terminal": {
+      exact(
+        value,
+        [
+          "schemaVersion",
+          "requestId",
+          "kind",
+          "sequence",
+          "timestamp",
+          "runId",
+          "status",
+          "exitCode",
+        ],
+        "Terminal terminal frame"
+      );
+      const status = terminalStatus(value.status);
+      const exitCode = terminalExitCode(value.exitCode, status);
+      return deepFreeze({
+        schemaVersion: "terminal-jsonl.v1",
+        requestId,
+        kind: "terminal",
+        sequence,
+        timestamp,
+        runId:
+          value.runId === null ? null : identifier(value.runId, "Terminal terminal frame runId"),
+        status,
+        exitCode,
+      });
+    }
+    default:
+      fail("INVALID_VALUE", "Terminal JSONL frame kind is invalid");
+  }
+}
+
+export function serializeAgentOsV1TerminalFrame(input: unknown): string {
+  return `${JSON.stringify(parseAgentOsV1TerminalFrame(input))}\n`;
+}
+
+export function parseAgentOsV1DestructiveCommandIntent(
+  input: unknown
+): Readonly<AgentOsV1DestructiveCommandIntent> {
+  const value = destructiveCommandRecord(input, "destructive command intent", [
+    "schemaVersion",
+    "tenantId",
+    "targets",
+    "commandId",
+    "operation",
+    "commandDigest",
+    "expectedRevision",
+    "idempotencyKey",
+    "risk",
+    "reason",
+    "requestId",
+    "authority",
+  ]);
+  return deepFreeze({
+    schemaVersion: "agent-os-destructive-command/v1",
+    ...destructiveCommandBindingOf(value, "destructive command intent"),
+    ...destructiveCommandOperationOf(value, "destructive command intent"),
+  });
+}
+
+export const AGENT_OS_V1_DESTRUCTIVE_CONFIRMATION_MAX_TTL_MS = 5 * 60 * 1_000;
+export const AGENT_OS_V1_DESTRUCTIVE_STEP_UP_PROOF_MAX_TTL_MS =
+  AGENT_OS_V1_DESTRUCTIVE_CONFIRMATION_MAX_TTL_MS;
+
+export function parseAgentOsV1DestructiveCommandConfirmation(
+  input: unknown
+): Readonly<AgentOsV1DestructiveCommandConfirmation> {
+  const value = destructiveCommandRecord(input, "destructive command confirmation", [
+    "schemaVersion",
+    "confirmationRef",
+    "stepUpRef",
+    "tenantId",
+    "targets",
+    "commandId",
+    "operation",
+    "commandDigest",
+    "expectedRevision",
+    "idempotencyKey",
+    "risk",
+    "reason",
+    "requestId",
+    "authority",
+    "issuedAt",
+    "expiresAt",
+  ]);
+  const issuedAt = instant(value.issuedAt, "destructive command confirmation issuedAt");
+  const expiresAt = instant(value.expiresAt, "destructive command confirmation expiresAt");
+  const confirmationTtlMs = Date.parse(expiresAt) - Date.parse(issuedAt);
+  if (confirmationTtlMs <= 0)
+    fail("INVALID_VALUE", "destructive command confirmation must expire after issuance");
+  if (confirmationTtlMs > AGENT_OS_V1_DESTRUCTIVE_CONFIRMATION_MAX_TTL_MS)
+    fail("INVALID_VALUE", "destructive command confirmation exceeds the fixed maximum TTL");
+  return deepFreeze({
+    schemaVersion: "agent-os-destructive-command/v1",
+    confirmationRef: qualifiedRef(
+      value.confirmationRef,
+      "confirmation",
+      "destructive command confirmation confirmationRef"
+    ),
+    stepUpRef: qualifiedRef(
+      value.stepUpRef,
+      "step-up",
+      "destructive command confirmation stepUpRef"
+    ),
+    ...destructiveCommandBindingOf(value, "destructive command confirmation"),
+    ...destructiveCommandOperationOf(value, "destructive command confirmation"),
+    issuedAt,
+    expiresAt,
+  });
+}
+
+export function parseAgentOsV1DestructiveCommandStepUpProof(
+  input: unknown
+): Readonly<AgentOsV1DestructiveCommandStepUpProof> {
+  const value = destructiveCommandRecord(input, "destructive command step-up proof", [
+    "schemaVersion",
+    "confirmationRef",
+    "stepUpRef",
+    "stepUpProofRef",
+    "tenantId",
+    "targets",
+    "commandId",
+    "operation",
+    "commandDigest",
+    "expectedRevision",
+    "idempotencyKey",
+    "risk",
+    "reason",
+    "requestId",
+    "authority",
+    "completedAt",
+    "expiresAt",
+  ]);
+  const completedAt = instant(value.completedAt, "destructive command step-up proof completedAt");
+  const expiresAt = instant(value.expiresAt, "destructive command step-up proof expiresAt");
+  const proofTtlMs = Date.parse(expiresAt) - Date.parse(completedAt);
+  if (proofTtlMs <= 0)
+    fail("INVALID_VALUE", "destructive command step-up proof must expire after completion");
+  if (proofTtlMs > AGENT_OS_V1_DESTRUCTIVE_STEP_UP_PROOF_MAX_TTL_MS)
+    fail("INVALID_VALUE", "destructive command step-up proof exceeds the fixed maximum TTL");
+  return deepFreeze({
+    schemaVersion: "agent-os-destructive-command/v1",
+    confirmationRef: qualifiedRef(
+      value.confirmationRef,
+      "confirmation",
+      "destructive command step-up proof confirmationRef"
+    ),
+    stepUpRef: qualifiedRef(
+      value.stepUpRef,
+      "step-up",
+      "destructive command step-up proof stepUpRef"
+    ),
+    stepUpProofRef: qualifiedRef(
+      value.stepUpProofRef,
+      "step-up-proof",
+      "destructive command step-up proof stepUpProofRef"
+    ),
+    ...destructiveCommandBindingOf(value, "destructive command step-up proof"),
+    ...destructiveCommandOperationOf(value, "destructive command step-up proof"),
+    completedAt,
+    expiresAt,
+  });
+}
+
+export function parseAgentOsV1DestructiveCommandSubmission(
+  input: unknown
+): Readonly<AgentOsV1DestructiveCommandSubmission> {
+  const value = destructiveCommandRecord(input, "destructive command submission", [
+    "schemaVersion",
+    "confirmationRef",
+    "stepUpRef",
+    "stepUpProofRef",
+    "tenantId",
+    "targets",
+    "commandId",
+    "operation",
+    "commandDigest",
+    "expectedRevision",
+    "idempotencyKey",
+    "risk",
+    "reason",
+    "requestId",
+    "authority",
+    "submittedAt",
+  ]);
+  return deepFreeze({
+    schemaVersion: "agent-os-destructive-command/v1",
+    confirmationRef: qualifiedRef(
+      value.confirmationRef,
+      "confirmation",
+      "destructive command submission confirmationRef"
+    ),
+    stepUpRef: qualifiedRef(value.stepUpRef, "step-up", "destructive command submission stepUpRef"),
+    stepUpProofRef: qualifiedRef(
+      value.stepUpProofRef,
+      "step-up-proof",
+      "destructive command submission stepUpProofRef"
+    ),
+    ...destructiveCommandBindingOf(value, "destructive command submission"),
+    ...destructiveCommandOperationOf(value, "destructive command submission"),
+    submittedAt: instant(value.submittedAt, "destructive command submission submittedAt"),
+  });
+}
+
+export function parseAgentOsV1DestructiveCommandReceipt(
+  input: unknown
+): Readonly<AgentOsV1DestructiveCommandReceipt> {
+  const value = destructiveCommandRecord(input, "destructive command receipt", [
+    "schemaVersion",
+    "receiptRef",
+    "confirmationRef",
+    "stepUpProofRef",
+    "tenantId",
+    "targets",
+    "commandId",
+    "operation",
+    "commandDigest",
+    "expectedRevision",
+    "idempotencyKey",
+    "risk",
+    "commandReason",
+    "requestId",
+    "authority",
+    "status",
+    "reason",
+    "effectPerformed",
+  ]);
+  if (value.status !== "accepted-no-effect" && value.status !== "rejected")
+    fail("INVALID_VALUE", "destructive command receipt status is invalid");
+  const reason = destructiveCommandRejection(value.reason);
+  if (
+    (value.status === "accepted-no-effect" && reason !== null) ||
+    (value.status === "rejected" && reason === null)
+  )
+    fail("INVALID_VALUE", "destructive command receipt status and reason disagree");
+  if (value.effectPerformed !== false)
+    fail("INVALID_VALUE", "DAR-479 destructive command receipt must prove no real effect");
+  return deepFreeze({
+    schemaVersion: "agent-os-destructive-command/v1",
+    receiptRef: qualifiedRef(value.receiptRef, "receipt", "destructive command receipt receiptRef"),
+    confirmationRef: qualifiedRef(
+      value.confirmationRef,
+      "confirmation",
+      "destructive command receipt confirmationRef"
+    ),
+    stepUpProofRef: qualifiedRef(
+      value.stepUpProofRef,
+      "step-up-proof",
+      "destructive command receipt stepUpProofRef"
+    ),
+    ...destructiveCommandBindingOf(value, "destructive command receipt"),
+    commandId: identifier(value.commandId, "destructive command receipt commandId"),
+    operation: identifier(value.operation, "destructive command receipt operation"),
+    commandDigest: digest(value.commandDigest, "destructive command receipt commandDigest"),
+    commandReason: destructiveCommandReason(
+      value.commandReason,
+      "destructive command receipt commandReason"
+    ),
+    status: value.status,
+    reason,
+    effectPerformed: false,
   });
 }
 
@@ -2650,6 +3032,154 @@ function opaqueRef(value: unknown, label: string): OpaqueRef {
   if (typeof value !== "string" || !OPAQUE_REF_PATTERN.test(value))
     fail("INVALID_VALUE", `${label} must be a namespace-qualified opaque ref`);
   return value as OpaqueRef;
+}
+
+function authorityEpoch(value: unknown, label: string): AgentOsV1AuthorityEpoch {
+  if (typeof value !== "string" || !AUTHORITY_EPOCH_PATTERN.test(value))
+    fail("INVALID_VALUE", `${label} must be an authority epoch opaque ref`);
+  return value as AgentOsV1AuthorityEpoch;
+}
+
+function appLifecycle(value: unknown, label: string): AgentOsV1AppLifecycleState {
+  if (
+    value !== "first-run" &&
+    value !== "awaiting-consent" &&
+    value !== "offline-local" &&
+    value !== "connected-managed" &&
+    value !== "policy-stale" &&
+    value !== "revoked" &&
+    value !== "recovery-required"
+  )
+    fail("INVALID_VALUE", `${label} is invalid`);
+  return value;
+}
+
+function appCompatibility(value: unknown, label: string): AgentOsV1AppCompatibility {
+  if (value !== "compatible" && value !== "update-required")
+    fail("INVALID_VALUE", `${label} is invalid`);
+  return value;
+}
+
+function terminalStatus(value: unknown): AgentOsV1TerminalStatus {
+  if (
+    value !== "succeeded" &&
+    value !== "failed" &&
+    value !== "usage-error" &&
+    value !== "cancelled" &&
+    value !== "recovery-required" &&
+    value !== "update-required" &&
+    value !== "unavailable" &&
+    value !== "auth-denied" &&
+    value !== "policy-denied"
+  )
+    fail("INVALID_VALUE", "Terminal terminal frame status is invalid");
+  return value;
+}
+
+function terminalExitCode(
+  value: unknown,
+  status: AgentOsV1TerminalStatus
+): AgentOsV1TerminalExitCode {
+  if (
+    value !== 0 &&
+    value !== 1 &&
+    value !== 2 &&
+    value !== 64 &&
+    value !== 69 &&
+    value !== 77 &&
+    value !== 130
+  )
+    fail("INVALID_VALUE", "Terminal terminal frame exitCode is invalid");
+  const matches =
+    (status === "succeeded" && value === 0) ||
+    (status === "failed" && value === 1) ||
+    (status === "usage-error" && value === 2) ||
+    (status === "recovery-required" && value === 64) ||
+    ((status === "update-required" || status === "unavailable") && value === 69) ||
+    ((status === "auth-denied" || status === "policy-denied") && value === 77) ||
+    (status === "cancelled" && value === 130);
+  if (!matches) fail("DRIFT_DETECTED", "Terminal terminal frame status and exitCode disagree");
+  return value;
+}
+
+function qualifiedRef(value: unknown, namespace: string, label: string): OpaqueRef {
+  const parsed = opaqueRef(value, label);
+  if (!parsed.startsWith(`${namespace}:`))
+    fail("INVALID_VALUE", `${label} must use the ${namespace} namespace`);
+  return parsed;
+}
+
+function destructiveCommandRecord(
+  input: unknown,
+  label: string,
+  keys: readonly string[]
+): Record<string, unknown> {
+  const value = record(input, label);
+  exact(value, keys, label);
+  if (value.schemaVersion !== "agent-os-destructive-command/v1")
+    fail("UNSUPPORTED_VERSION", `${label} schemaVersion is unsupported`);
+  return value;
+}
+
+function destructiveCommandBindingOf(value: Record<string, unknown>, label: string) {
+  return {
+    tenantId: identifier(value.tenantId, `${label} tenantId`),
+    targets: destructiveCommandTargets(value.targets, `${label} targets`),
+    expectedRevision: nonNegativeInteger(value.expectedRevision, `${label} expectedRevision`),
+    idempotencyKey: qualifiedRef(value.idempotencyKey, "idempotency", `${label} idempotencyKey`),
+    risk: destructiveCommandRisk(value.risk, `${label} risk`),
+    requestId: identifier(value.requestId, `${label} requestId`),
+    authority: digestRefOf(value.authority, `${label} authority`),
+  };
+}
+
+function destructiveCommandOperationOf(value: Record<string, unknown>, label: string) {
+  return {
+    commandId: identifier(value.commandId, `${label} commandId`),
+    operation: identifier(value.operation, `${label} operation`),
+    commandDigest: digest(value.commandDigest, `${label} commandDigest`),
+    reason: destructiveCommandReason(value.reason, `${label} reason`),
+  };
+}
+
+function destructiveCommandTargets(value: unknown, label: string): readonly OpaqueRef[] {
+  const targets = arrayValues(value, label).map((target, index) =>
+    opaqueRef(target, `${label}[${index}]`)
+  );
+  if (targets.length === 0 || targets.length > 64)
+    fail("INVALID_VALUE", `${label} must contain 1 to 64 targets`);
+  const sorted = [...targets].sort((left, right) => left.localeCompare(right));
+  if (sorted.some((target, index) => target === sorted[index - 1]))
+    fail("INVALID_VALUE", `${label} must not contain duplicates`);
+  if (targets.some((target, index) => target !== sorted[index]))
+    fail("INVALID_VALUE", `${label} must use canonical lexical order`);
+  return sorted;
+}
+
+function destructiveCommandRisk(value: unknown, label: string): AgentOsV1DestructiveCommandRisk {
+  if (value !== "high" && value !== "critical") fail("INVALID_VALUE", `${label} is invalid`);
+  return value;
+}
+
+function destructiveCommandReason(value: unknown, label: string): string {
+  const reason = boundedUtf8String(value, label, 1_024);
+  if (reason.trim() !== reason) fail("INVALID_VALUE", `${label} must be canonical trimmed text`);
+  return reason;
+}
+
+function destructiveCommandRejection(value: unknown): AgentOsV1DestructiveCommandRejection | null {
+  if (value === null) return null;
+  if (
+    value !== "expired" &&
+    value !== "reused" &&
+    value !== "revoked" &&
+    value !== "cross-tenant" &&
+    value !== "step-up-mismatch" &&
+    value !== "revision-conflict" &&
+    value !== "intent-drift"
+  )
+    fail("INVALID_VALUE", "destructive command receipt reason is invalid");
+  return value;
 }
 
 function leaseEpochRef(value: unknown, label: string): LeaseEpochRef {
