@@ -64,6 +64,8 @@ export interface AgentOsBudgetReservationRequestUnsignedV1 {
   readonly ceilingId: string;
   readonly ceilingDigest: string;
   readonly expectedCeilingRevision: number;
+  readonly balanceStateDigest: string;
+  readonly expectedBalanceRevision: number;
   readonly parentReservationId: string | null;
   readonly parentReservationDigest: string | null;
   readonly parentAttributionKey: string | null;
@@ -100,6 +102,8 @@ export interface AgentOsBudgetReservationReceiptUnsignedV1 {
   readonly ceilingId: string;
   readonly ceilingDigest: string;
   readonly ceilingRevision: number;
+  readonly balanceStateDigest: string;
+  readonly balanceRevision: number;
   readonly parentReservationId: string | null;
   readonly reservationRevision: number;
   readonly reserved: Readonly<AgentOsBudgetVectorV1>;
@@ -116,6 +120,54 @@ export interface AgentOsBudgetReservationReceiptV1 extends AgentOsBudgetReservat
 
 export type AgentOsBudgetSettlementOperationV1 = "commit" | "release" | "refund";
 
+export interface AgentOsBudgetCommitStateV1 {
+  readonly commitReceiptDigest: string;
+  readonly usageEvidenceDigest: string;
+  readonly committed: Readonly<AgentOsBudgetVectorV1>;
+  readonly refunded: Readonly<AgentOsBudgetVectorV1>;
+}
+
+export type AgentOsBudgetCurrentStateOwnerDispositionV1 = "ceiling" | "reserved" | "closed";
+
+export interface AgentOsBudgetCurrentStateUnsignedV1 {
+  readonly schemaVersion: "agent-os-run-tree-budget/v1";
+  readonly ceilingId: string;
+  readonly ceilingDigest: string;
+  readonly ceilingRevision: number;
+  readonly ownerReservationId: string | null;
+  readonly ownerReservationReceiptDigest: string | null;
+  readonly ownerDisposition: AgentOsBudgetCurrentStateOwnerDispositionV1;
+  readonly balanceRevision: number;
+  readonly reservationRevision: number;
+  readonly reserved: Readonly<AgentOsBudgetVectorV1>;
+  readonly available: Readonly<AgentOsBudgetVectorV1>;
+  readonly committedTotal: Readonly<AgentOsBudgetVectorV1>;
+  readonly releasedTotal: Readonly<AgentOsBudgetVectorV1>;
+  readonly refundedTotal: Readonly<AgentOsBudgetVectorV1>;
+  readonly commitStates: readonly Readonly<AgentOsBudgetCommitStateV1>[];
+  readonly latestSettlementReceiptDigest: string | null;
+  readonly capturedAt: string;
+}
+
+export interface AgentOsBudgetCurrentStateV1 extends AgentOsBudgetCurrentStateUnsignedV1 {
+  readonly stateDigest: string;
+}
+
+export interface AgentOsBudgetSettlementMutationUnsignedV1 {
+  readonly schemaVersion: "agent-os-run-tree-budget/v1";
+  readonly operation: AgentOsBudgetSettlementOperationV1;
+  readonly commandId: string;
+  readonly reservationId: string;
+  readonly reservationReceiptDigest: string;
+  readonly previousStateDigest: string;
+  readonly expectedReservationRevision: number;
+  readonly amount: Readonly<AgentOsBudgetVectorV1>;
+  readonly sourceCommitReceiptDigest: string | null;
+  readonly usageEvidenceDigest: string | null;
+  readonly correctionEvidenceDigest: string | null;
+  readonly occurredAt: string;
+}
+
 export interface AgentOsBudgetSettlementReceiptUnsignedV1 {
   readonly schemaVersion: "agent-os-run-tree-budget/v1";
   readonly operation: AgentOsBudgetSettlementOperationV1;
@@ -123,12 +175,16 @@ export interface AgentOsBudgetSettlementReceiptUnsignedV1 {
   readonly commandId: string;
   readonly reservationId: string;
   readonly reservationReceiptDigest: string;
+  readonly previousStateDigest: string;
+  readonly mutationDigest: string;
   readonly expectedReservationRevision: number;
   readonly reservationRevision: number;
   readonly amount: Readonly<AgentOsBudgetVectorV1>;
   readonly committedTotal: Readonly<AgentOsBudgetVectorV1>;
   readonly releasedTotal: Readonly<AgentOsBudgetVectorV1>;
   readonly refundedTotal: Readonly<AgentOsBudgetVectorV1>;
+  readonly sourceCommitReceiptDigest: string | null;
+  readonly sourceCommitRefundedTotal: Readonly<AgentOsBudgetVectorV1> | null;
   readonly usageEvidenceDigest: string | null;
   readonly correctionEvidenceDigest: string | null;
   readonly occurredAt: string;
@@ -177,7 +233,8 @@ export interface AgentOsBudgetCeilingSuccessorV1 extends AgentOsBudgetCeilingSuc
 /** 注入式只读端口；协议包不提供 transport、cache 或 storage implementation。 */
 export interface BudgetReservationCurrentStatePortV1 {
   readCeiling(ceilingId: string): Promise<Readonly<AgentOsRunTreeBudgetCeilingV1> | null>;
-  readReservation(
-    reservationId: string
-  ): Promise<Readonly<AgentOsBudgetReservationReceiptV1> | null>;
+  readCurrentState(
+    ceilingId: string,
+    ownerReservationId: string | null
+  ): Promise<Readonly<AgentOsBudgetCurrentStateV1> | null>;
 }

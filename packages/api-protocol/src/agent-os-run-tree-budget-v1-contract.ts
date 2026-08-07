@@ -1,7 +1,13 @@
 import { AgentOsV1ContractError } from "./agent-os-v1-contract.js";
+import { parseAgentOsEffectDispatchReceiptV1 } from "./agent-os-effect-v1-contract.js";
+import type { AgentOsEffectDispatchReceiptV1 } from "./agent-os-effect-v1-types.js";
 import type {
   AgentOsBudgetCeilingSuccessorUnsignedV1,
   AgentOsBudgetCeilingSuccessorV1,
+  AgentOsBudgetCommitStateV1,
+  AgentOsBudgetCurrentStateOwnerDispositionV1,
+  AgentOsBudgetCurrentStateUnsignedV1,
+  AgentOsBudgetCurrentStateV1,
   AgentOsBudgetDimensionV1,
   AgentOsBudgetObservationV1,
   AgentOsBudgetObservedQuantityV1,
@@ -11,6 +17,7 @@ import type {
   AgentOsBudgetReservationRequestUnsignedV1,
   AgentOsBudgetReservationRequestV1,
   AgentOsBudgetSettlementOperationV1,
+  AgentOsBudgetSettlementMutationUnsignedV1,
   AgentOsBudgetSettlementReceiptUnsignedV1,
   AgentOsBudgetSettlementReceiptV1,
   AgentOsBudgetSubjectV1,
@@ -26,6 +33,10 @@ import type {
 export type {
   AgentOsBudgetCeilingSuccessorUnsignedV1,
   AgentOsBudgetCeilingSuccessorV1,
+  AgentOsBudgetCommitStateV1,
+  AgentOsBudgetCurrentStateOwnerDispositionV1,
+  AgentOsBudgetCurrentStateUnsignedV1,
+  AgentOsBudgetCurrentStateV1,
   AgentOsBudgetDimensionV1,
   AgentOsBudgetObservationV1,
   AgentOsBudgetObservedQuantityV1,
@@ -36,6 +47,7 @@ export type {
   AgentOsBudgetReservationRequestUnsignedV1,
   AgentOsBudgetReservationRequestV1,
   AgentOsBudgetSettlementOperationV1,
+  AgentOsBudgetSettlementMutationUnsignedV1,
   AgentOsBudgetSettlementReceiptUnsignedV1,
   AgentOsBudgetSettlementReceiptV1,
   AgentOsBudgetSubjectV1,
@@ -80,6 +92,8 @@ const RESERVATION_REQUEST_UNSIGNED_KEYS = [
   "ceilingId",
   "ceilingDigest",
   "expectedCeilingRevision",
+  "balanceStateDigest",
+  "expectedBalanceRevision",
   "parentReservationId",
   "parentReservationDigest",
   "parentAttributionKey",
@@ -104,6 +118,8 @@ const RESERVATION_RECEIPT_UNSIGNED_KEYS = [
   "ceilingId",
   "ceilingDigest",
   "ceilingRevision",
+  "balanceStateDigest",
+  "balanceRevision",
   "parentReservationId",
   "reservationRevision",
   "reserved",
@@ -113,6 +129,45 @@ const RESERVATION_RECEIPT_UNSIGNED_KEYS = [
   "chargeKey",
   "committedAt",
 ] as const;
+const CURRENT_STATE_UNSIGNED_KEYS = [
+  "schemaVersion",
+  "ceilingId",
+  "ceilingDigest",
+  "ceilingRevision",
+  "ownerReservationId",
+  "ownerReservationReceiptDigest",
+  "ownerDisposition",
+  "balanceRevision",
+  "reservationRevision",
+  "reserved",
+  "available",
+  "committedTotal",
+  "releasedTotal",
+  "refundedTotal",
+  "commitStates",
+  "latestSettlementReceiptDigest",
+  "capturedAt",
+] as const;
+const COMMIT_STATE_KEYS = [
+  "commitReceiptDigest",
+  "usageEvidenceDigest",
+  "committed",
+  "refunded",
+] as const;
+const SETTLEMENT_MUTATION_KEYS = [
+  "schemaVersion",
+  "operation",
+  "commandId",
+  "reservationId",
+  "reservationReceiptDigest",
+  "previousStateDigest",
+  "expectedReservationRevision",
+  "amount",
+  "sourceCommitReceiptDigest",
+  "usageEvidenceDigest",
+  "correctionEvidenceDigest",
+  "occurredAt",
+] as const;
 const SETTLEMENT_UNSIGNED_KEYS = [
   "schemaVersion",
   "operation",
@@ -120,12 +175,16 @@ const SETTLEMENT_UNSIGNED_KEYS = [
   "commandId",
   "reservationId",
   "reservationReceiptDigest",
+  "previousStateDigest",
+  "mutationDigest",
   "expectedReservationRevision",
   "reservationRevision",
   "amount",
   "committedTotal",
   "releasedTotal",
   "refundedTotal",
+  "sourceCommitReceiptDigest",
+  "sourceCommitRefundedTotal",
   "usageEvidenceDigest",
   "correctionEvidenceDigest",
   "occurredAt",
@@ -176,22 +235,24 @@ export interface AgentOsBudgetChargeIdentityInputV1 {
 export interface AgentOsBudgetReservationRelationshipInputV1 {
   readonly ceiling: unknown;
   readonly parent: unknown | null;
-  readonly available: unknown;
+  readonly currentState: unknown;
   readonly request: unknown;
   readonly receipt: unknown;
 }
 
 export interface AgentOsBudgetSettlementRelationshipInputV1 {
   readonly reservation: unknown;
-  readonly previousCommitted: unknown;
-  readonly previousReleased: unknown;
-  readonly previousRefunded: unknown;
+  readonly currentState: unknown;
+  readonly sourceCommit: unknown | null;
   readonly receipt: unknown;
 }
 
 export interface AgentOsResourceAttributionRelationshipInputV1 {
+  readonly ceiling: unknown;
+  readonly currentState: unknown;
+  readonly request: unknown;
   readonly reservation: unknown;
-  readonly hardDimensions: unknown;
+  readonly effectDispatchReceipt: unknown;
   readonly attribution: unknown;
 }
 
@@ -244,6 +305,16 @@ export function parseAgentOsBudgetReservationReceiptV1(
     "budget reservation receipt receiptDigest"
   );
   return deepFreeze({ ...unsigned, receiptDigest });
+}
+
+export function parseAgentOsBudgetCurrentStateV1(
+  input: unknown
+): Readonly<AgentOsBudgetCurrentStateV1> {
+  const value = record(input, "budget current state");
+  exact(value, [...CURRENT_STATE_UNSIGNED_KEYS, "stateDigest"], "budget current state");
+  const unsigned = currentStateUnsigned(omitField(value, "stateDigest"));
+  const stateDigest = selfDigest(value.stateDigest, unsigned, "budget current state stateDigest");
+  return deepFreeze({ ...unsigned, stateDigest });
 }
 
 export function parseAgentOsBudgetSettlementReceiptV1(
@@ -300,6 +371,10 @@ export function serializeAgentOsBudgetReservationReceiptV1(input: unknown): stri
   return canonicalJson(parseAgentOsBudgetReservationReceiptV1(input));
 }
 
+export function serializeAgentOsBudgetCurrentStateV1(input: unknown): string {
+  return canonicalJson(parseAgentOsBudgetCurrentStateV1(input));
+}
+
 export function serializeAgentOsBudgetSettlementReceiptV1(input: unknown): string {
   return canonicalJson(parseAgentOsBudgetSettlementReceiptV1(input));
 }
@@ -325,6 +400,18 @@ export function createAgentOsBudgetReservationRequestDigestV1(input: unknown): s
 export function createAgentOsBudgetReservationReceiptDigestV1(input: unknown): string {
   return contentDigest(
     canonicalJson(reservationReceiptUnsigned(record(input, "budget reservation receipt unsigned")))
+  );
+}
+
+export function createAgentOsBudgetCurrentStateDigestV1(input: unknown): string {
+  return contentDigest(
+    canonicalJson(currentStateUnsigned(record(input, "budget current state unsigned")))
+  );
+}
+
+export function createAgentOsBudgetSettlementMutationDigestV1(input: unknown): string {
+  return contentDigest(
+    canonicalJson(settlementMutationUnsigned(record(input, "budget settlement mutation unsigned")))
   );
 }
 
@@ -390,22 +477,38 @@ export function assertAgentOsBudgetReservationRelationshipV1(
   const ceiling = parseAgentOsRunTreeBudgetCeilingV1(input.ceiling);
   const request = parseAgentOsBudgetReservationRequestV1(input.request);
   const receipt = parseAgentOsBudgetReservationReceiptV1(input.receipt);
-  const available = budgetVector(input.available, "budget reservation available");
+  const currentState = parseAgentOsBudgetCurrentStateV1(input.currentState);
+  const available = currentState.available;
   const parent =
     input.parent === null ? null : parseAgentOsBudgetReservationReceiptV1(input.parent);
 
   same(request.ceilingId, ceiling.ceilingId, "reservation ceilingId drift");
   same(request.ceilingDigest, ceiling.ceilingDigest, "reservation ceilingDigest drift");
   same(request.expectedCeilingRevision, ceiling.revision, "reservation ceiling revision drift");
+  same(request.balanceStateDigest, currentState.stateDigest, "reservation balance state drift");
+  same(
+    request.expectedBalanceRevision,
+    currentState.balanceRevision,
+    "reservation balance revision drift"
+  );
   same(receipt.commandId, request.commandId, "reservation commandId drift");
   same(receipt.reservationId, request.reservationId, "reservation identity drift");
   same(receipt.requestDigest, request.requestDigest, "reservation request digest drift");
   same(receipt.ceilingId, ceiling.ceilingId, "receipt ceilingId drift");
   same(receipt.ceilingDigest, ceiling.ceilingDigest, "receipt ceilingDigest drift");
   same(receipt.ceilingRevision, ceiling.revision, "receipt ceiling revision drift");
+  same(receipt.balanceStateDigest, currentState.stateDigest, "receipt balance state drift");
+  same(
+    receipt.balanceRevision,
+    currentState.balanceRevision + 1,
+    "receipt balance revision must advance exactly once"
+  );
   same(receipt.attributionKey, request.attributionKey, "reservation attribution drift");
   same(receipt.chargeKey, request.chargeKey, "reservation charge drift");
   assertVectorEqual(receipt.availableBefore, available, "reservation availableBefore drift");
+  same(currentState.ceilingId, ceiling.ceilingId, "current state ceilingId drift");
+  same(currentState.ceilingDigest, ceiling.ceilingDigest, "current state ceilingDigest drift");
+  same(currentState.ceilingRevision, ceiling.revision, "current state ceiling revision drift");
 
   if (parent === null) {
     if (
@@ -415,12 +518,36 @@ export function assertAgentOsBudgetReservationRelationshipV1(
       receipt.parentReservationId !== null
     )
       fail("DRIFT_DETECTED", "root reservation must not claim parent lineage");
+    if (
+      currentState.ownerDisposition !== "ceiling" ||
+      currentState.ownerReservationId !== null ||
+      currentState.ownerReservationReceiptDigest !== null ||
+      currentState.reservationRevision !== 0
+    )
+      fail("DRIFT_DETECTED", "root reservation requires canonical ceiling balance state");
+    assertVectorEqual(currentState.reserved, ceiling.limit, "root balance capacity drift");
     assertVectorWithin(request.requested, ceiling.limit, "root reservation exceeds ceiling");
   } else {
+    if (parent.disposition !== "reserved")
+      fail("INVALID_VALUE", "child reservation requires an active reserved parent");
+    if (request.reservationId === parent.reservationId)
+      fail("DRIFT_DETECTED", "reservation cannot be its own parent");
+    same(parent.ceilingId, ceiling.ceilingId, "parent ceilingId drift");
+    same(parent.ceilingDigest, ceiling.ceilingDigest, "parent ceilingDigest drift");
+    same(parent.ceilingRevision, ceiling.revision, "parent ceiling revision drift");
     same(request.parentReservationId, parent.reservationId, "parent reservationId drift");
     same(request.parentReservationDigest, parent.receiptDigest, "parent reservation digest drift");
     same(request.parentAttributionKey, parent.attributionKey, "parent attribution drift");
     same(receipt.parentReservationId, parent.reservationId, "receipt parent drift");
+    if (currentState.ownerDisposition !== "reserved")
+      fail("INVALID_VALUE", "child reservation requires active parent current state");
+    same(currentState.ownerReservationId, parent.reservationId, "current parent identity drift");
+    same(
+      currentState.ownerReservationReceiptDigest,
+      parent.receiptDigest,
+      "current parent receipt drift"
+    );
+    assertVectorEqual(currentState.reserved, parent.reserved, "parent current capacity drift");
     assertVectorWithin(request.requested, parent.reserved, "child reservation exceeds parent");
   }
 
@@ -469,32 +596,78 @@ export function assertAgentOsBudgetSettlementRelationshipV1(
   const reservation = parseAgentOsBudgetReservationReceiptV1(input.reservation);
   if (reservation.disposition !== "reserved")
     fail("INVALID_VALUE", "settlement requires a successful reservation");
+  const currentState = parseAgentOsBudgetCurrentStateV1(input.currentState);
   const receipt = parseAgentOsBudgetSettlementReceiptV1(input.receipt);
-  const previousCommitted = budgetVector(input.previousCommitted, "previous committed");
-  const previousReleased = budgetVector(input.previousReleased, "previous released");
-  const previousRefunded = budgetVector(input.previousRefunded, "previous refunded");
+  const sourceCommit =
+    input.sourceCommit === null ? null : parseAgentOsBudgetSettlementReceiptV1(input.sourceCommit);
   same(receipt.reservationId, reservation.reservationId, "settlement reservationId drift");
   same(
     receipt.reservationReceiptDigest,
     reservation.receiptDigest,
     "settlement reservation digest drift"
   );
+  same(currentState.ownerReservationId, reservation.reservationId, "current reservation drift");
+  same(
+    currentState.ownerReservationReceiptDigest,
+    reservation.receiptDigest,
+    "current reservation receipt drift"
+  );
+  same(currentState.ceilingId, reservation.ceilingId, "settlement current ceilingId drift");
+  same(
+    currentState.ceilingDigest,
+    reservation.ceilingDigest,
+    "settlement current ceilingDigest drift"
+  );
+  same(
+    currentState.ceilingRevision,
+    reservation.ceilingRevision,
+    "settlement current ceiling revision drift"
+  );
+  if (currentState.ownerDisposition !== "reserved")
+    fail("INVALID_VALUE", "settlement requires an active reservation current state");
+  assertVectorEqual(currentState.reserved, reservation.reserved, "current reserved amount drift");
+  same(receipt.previousStateDigest, currentState.stateDigest, "settlement previous state drift");
+  same(
+    receipt.expectedReservationRevision,
+    currentState.reservationRevision,
+    "settlement expected revision is stale"
+  );
   same(
     receipt.reservationRevision,
-    receipt.expectedReservationRevision + 1,
+    currentState.reservationRevision + 1,
     "settlement revision must advance exactly once"
+  );
+  same(
+    receipt.mutationDigest,
+    createAgentOsBudgetSettlementMutationDigestV1({
+      schemaVersion: receipt.schemaVersion,
+      operation: receipt.operation,
+      commandId: receipt.commandId,
+      reservationId: receipt.reservationId,
+      reservationReceiptDigest: receipt.reservationReceiptDigest,
+      previousStateDigest: receipt.previousStateDigest,
+      expectedReservationRevision: receipt.expectedReservationRevision,
+      amount: receipt.amount,
+      sourceCommitReceiptDigest: receipt.sourceCommitReceiptDigest,
+      usageEvidenceDigest: receipt.usageEvidenceDigest,
+      correctionEvidenceDigest: receipt.correctionEvidenceDigest,
+      occurredAt: receipt.occurredAt,
+    }),
+    "settlement mutation digest drift"
   );
 
   const expectedCommitted =
     receipt.operation === "commit"
-      ? addVector(previousCommitted, receipt.amount)
-      : previousCommitted;
+      ? addVector(currentState.committedTotal, receipt.amount)
+      : currentState.committedTotal;
   const expectedReleased =
     receipt.operation === "release"
-      ? addVector(previousReleased, receipt.amount)
-      : previousReleased;
+      ? addVector(currentState.releasedTotal, receipt.amount)
+      : currentState.releasedTotal;
   const expectedRefunded =
-    receipt.operation === "refund" ? addVector(previousRefunded, receipt.amount) : previousRefunded;
+    receipt.operation === "refund"
+      ? addVector(currentState.refundedTotal, receipt.amount)
+      : currentState.refundedTotal;
   assertVectorEqual(receipt.committedTotal, expectedCommitted, "settlement committed total drift");
   assertVectorEqual(receipt.releasedTotal, expectedReleased, "settlement released total drift");
   assertVectorEqual(receipt.refundedTotal, expectedRefunded, "settlement refunded total drift");
@@ -512,22 +685,105 @@ export function assertAgentOsBudgetSettlementRelationshipV1(
   if (receipt.operation === "commit") {
     if (receipt.usageEvidenceDigest === null || receipt.correctionEvidenceDigest !== null)
       fail("DRIFT_DETECTED", "commit requires usage evidence and forbids correction evidence");
+    if (
+      sourceCommit !== null ||
+      receipt.sourceCommitReceiptDigest !== null ||
+      receipt.sourceCommitRefundedTotal !== null
+    )
+      fail("DRIFT_DETECTED", "commit must not claim source commit lineage");
   } else if (receipt.operation === "release") {
     if (receipt.usageEvidenceDigest !== null || receipt.correctionEvidenceDigest !== null)
       fail("DRIFT_DETECTED", "release must not fabricate usage or correction evidence");
-  } else if (receipt.usageEvidenceDigest === null || receipt.correctionEvidenceDigest === null) {
-    fail("DRIFT_DETECTED", "refund requires usage and authoritative correction evidence");
+    if (currentState.commitStates.length !== 0)
+      fail("DRIFT_DETECTED", "release is forbidden after any committed side-effect boundary");
+    if (
+      sourceCommit !== null ||
+      receipt.sourceCommitReceiptDigest !== null ||
+      receipt.sourceCommitRefundedTotal !== null
+    )
+      fail("DRIFT_DETECTED", "release must not claim source commit lineage");
+  } else {
+    if (receipt.usageEvidenceDigest === null || receipt.correctionEvidenceDigest === null)
+      fail("DRIFT_DETECTED", "refund requires usage and authoritative correction evidence");
+    if (sourceCommit === null || receipt.sourceCommitReceiptDigest === null)
+      fail("DRIFT_DETECTED", "refund requires its original commit receipt");
+    if (sourceCommit.operation !== "commit")
+      fail("INVALID_VALUE", "refund source receipt must be a commit");
+    same(sourceCommit.reservationId, reservation.reservationId, "refund source reservation drift");
+    same(
+      sourceCommit.receiptDigest,
+      receipt.sourceCommitReceiptDigest,
+      "refund source commit digest drift"
+    );
+    same(
+      receipt.usageEvidenceDigest,
+      sourceCommit.usageEvidenceDigest,
+      "refund source usage evidence drift"
+    );
+    const sourceState = currentState.commitStates.find(
+      (item) => item.commitReceiptDigest === sourceCommit.receiptDigest
+    );
+    if (sourceState === undefined)
+      fail("DRIFT_DETECTED", "refund source commit is absent from current state");
+    same(
+      sourceState.usageEvidenceDigest,
+      sourceCommit.usageEvidenceDigest,
+      "refund current source usage drift"
+    );
+    assertVectorEqual(sourceState.committed, sourceCommit.amount, "refund source amount drift");
+    const expectedSourceRefunded = addVector(sourceState.refunded, receipt.amount);
+    if (receipt.sourceCommitRefundedTotal === null)
+      fail("DRIFT_DETECTED", "refund requires per-source refunded total");
+    assertVectorEqual(
+      receipt.sourceCommitRefundedTotal,
+      expectedSourceRefunded,
+      "refund source total drift"
+    );
+    assertVectorWithin(
+      receipt.sourceCommitRefundedTotal,
+      sourceState.committed,
+      "refund exceeds original commit"
+    );
   }
 }
 
 export function assertAgentOsResourceAttributionRelationshipV1(
   input: AgentOsResourceAttributionRelationshipInputV1
 ): void {
+  const ceiling = parseAgentOsRunTreeBudgetCeilingV1(input.ceiling);
+  const currentState = parseAgentOsBudgetCurrentStateV1(input.currentState);
+  const request = parseAgentOsBudgetReservationRequestV1(input.request);
   const reservation = parseAgentOsBudgetReservationReceiptV1(input.reservation);
   if (reservation.disposition !== "reserved")
     fail("INVALID_VALUE", "attribution requires a successful reservation");
+  const effectDispatchReceipt: Readonly<AgentOsEffectDispatchReceiptV1> =
+    parseAgentOsEffectDispatchReceiptV1(input.effectDispatchReceipt);
   const attribution = parseAgentOsResourceAttributionReceiptV1(input.attribution);
-  const hardDimensions = budgetDimensions(input.hardDimensions, "hard dimensions");
+  same(request.requestDigest, reservation.requestDigest, "attribution request digest drift");
+  same(request.reservationId, reservation.reservationId, "attribution request identity drift");
+  same(ceiling.ceilingId, reservation.ceilingId, "attribution ceilingId drift");
+  same(ceiling.ceilingDigest, reservation.ceilingDigest, "attribution ceilingDigest drift");
+  same(ceiling.revision, reservation.ceilingRevision, "attribution ceiling revision drift");
+  same(currentState.ceilingId, ceiling.ceilingId, "attribution current ceilingId drift");
+  same(
+    currentState.ceilingDigest,
+    ceiling.ceilingDigest,
+    "attribution current ceilingDigest drift"
+  );
+  same(
+    currentState.ownerReservationId,
+    reservation.reservationId,
+    "attribution current reservation drift"
+  );
+  same(
+    currentState.ownerReservationReceiptDigest,
+    reservation.receiptDigest,
+    "attribution current reservation receipt drift"
+  );
+  if (currentState.ownerDisposition !== "reserved")
+    fail("INVALID_VALUE", "attribution requires an active reservation current state");
+  if (request.subject.kind !== "effect")
+    fail("INVALID_VALUE", "resource attribution requires an effect reservation");
   same(attribution.reservationId, reservation.reservationId, "attribution reservation drift");
   same(
     attribution.reservationReceiptDigest,
@@ -535,7 +791,29 @@ export function assertAgentOsResourceAttributionRelationshipV1(
     "attribution reservation digest drift"
   );
   same(attribution.attributionKey, reservation.attributionKey, "attribution key drift");
-  same(attribution.chargeKey, reservation.chargeKey, "charge key drift");
+  same(attribution.attemptId, request.subject.attemptId, "attribution Attempt identity drift");
+  same(attribution.effectId, request.subject.effectId, "attribution Effect identity drift");
+  same(effectDispatchReceipt.runId, request.subject.runId, "dispatch Run identity drift");
+  same(effectDispatchReceipt.attemptId, attribution.attemptId, "dispatch Attempt identity drift");
+  same(effectDispatchReceipt.effectId, attribution.effectId, "dispatch Effect identity drift");
+  same(
+    effectDispatchReceipt.permitDigest,
+    request.effectPermitDigest,
+    "dispatch EffectPermit drift"
+  );
+  same(
+    attribution.effectDispatchReceiptDigest,
+    effectDispatchReceipt.receiptDigest,
+    "attribution dispatch receipt drift"
+  );
+  const expectedChargeKey = createAgentOsBudgetChargeKeyV1({
+    attributionKey: attribution.attributionKey,
+    reservationId: attribution.reservationId,
+    attemptId: attribution.attemptId,
+    effectId: attribution.effectId,
+  });
+  same(attribution.chargeKey, expectedChargeKey, "attribution charge identity drift");
+  same(reservation.chargeKey, expectedChargeKey, "reservation charge identity drift");
   assertVectorWithin(
     attribution.conservativeCharge,
     reservation.reserved,
@@ -547,7 +825,11 @@ export function assertAgentOsResourceAttributionRelationshipV1(
     const reserved = vectorForDimension(reservation.reserved, dimension);
     if (observation.kind === "known" && charge < observation.value)
       fail("GRANT_EXPANSION", `${dimension} charge cannot be below known usage`);
-    if (observation.kind === "unknown" && hardDimensions.includes(dimension) && charge !== reserved)
+    if (
+      observation.kind === "unknown" &&
+      ceiling.hardDimensions.includes(dimension) &&
+      charge !== reserved
+    )
       fail(
         "GRANT_EXPANSION",
         `${dimension} unknown hard usage must conservatively charge its reservation`
@@ -642,6 +924,14 @@ function reservationRequestUnsigned(
       value.expectedCeilingRevision,
       "budget reservation request expectedCeilingRevision"
     ),
+    balanceStateDigest: digest(
+      value.balanceStateDigest,
+      "budget reservation request balanceStateDigest"
+    ),
+    expectedBalanceRevision: nonNegativeInteger(
+      value.expectedBalanceRevision,
+      "budget reservation request expectedBalanceRevision"
+    ),
     parentReservationId,
     parentReservationDigest,
     parentAttributionKey,
@@ -688,6 +978,14 @@ function reservationReceiptUnsigned(
       value.ceilingRevision,
       "budget reservation receipt ceilingRevision"
     ),
+    balanceStateDigest: digest(
+      value.balanceStateDigest,
+      "budget reservation receipt balanceStateDigest"
+    ),
+    balanceRevision: positiveInteger(
+      value.balanceRevision,
+      "budget reservation receipt balanceRevision"
+    ),
     parentReservationId: nullableIdentifier(
       value.parentReservationId,
       "budget reservation receipt parentReservationId"
@@ -708,6 +1006,166 @@ function reservationReceiptUnsigned(
   });
 }
 
+function currentStateUnsigned(value: Record<string, unknown>): AgentOsBudgetCurrentStateUnsignedV1 {
+  exact(value, CURRENT_STATE_UNSIGNED_KEYS, "budget current state unsigned");
+  schema(value.schemaVersion, "budget current state");
+  const ownerDisposition = currentStateOwnerDisposition(value.ownerDisposition);
+  const ownerReservationId = nullableIdentifier(
+    value.ownerReservationId,
+    "budget current state ownerReservationId"
+  );
+  const ownerReservationReceiptDigest = nullableDigest(
+    value.ownerReservationReceiptDigest,
+    "budget current state ownerReservationReceiptDigest"
+  );
+  if ((ownerReservationId === null) !== (ownerReservationReceiptDigest === null))
+    fail("INVALID_SHAPE", "budget current state owner lineage must be all-null or complete");
+  if ((ownerDisposition === "ceiling") !== (ownerReservationId === null))
+    fail("INVALID_SHAPE", "only ceiling state may omit owner reservation lineage");
+
+  const reservationRevision = nonNegativeInteger(
+    value.reservationRevision,
+    "budget current state reservationRevision"
+  );
+  if (ownerDisposition === "ceiling" && reservationRevision !== 0)
+    fail("DRIFT_DETECTED", "ceiling current state reservationRevision must equal zero");
+  if (ownerDisposition !== "ceiling" && reservationRevision === 0)
+    fail("DRIFT_DETECTED", "reservation current state requires a positive revision");
+
+  const reserved = budgetVector(value.reserved, "budget current state reserved");
+  const available = budgetVector(value.available, "budget current state available");
+  const committedTotal = budgetVector(value.committedTotal, "budget current state committedTotal");
+  const releasedTotal = budgetVector(value.releasedTotal, "budget current state releasedTotal");
+  const refundedTotal = budgetVector(value.refundedTotal, "budget current state refundedTotal");
+  const commitStates = commitStateValues(value.commitStates);
+
+  assertVectorWithin(available, reserved, "current available exceeds reserved capacity");
+  assertVectorWithin(
+    addVector(committedTotal, releasedTotal),
+    reserved,
+    "current commit plus release exceeds reservation"
+  );
+  assertVectorWithin(refundedTotal, committedTotal, "current refund exceeds committed charge");
+  const commitTotals = commitStates.reduce(
+    (sum, item) => addVector(sum, item.committed),
+    ZERO_VECTOR
+  );
+  const refundTotals = commitStates.reduce(
+    (sum, item) => addVector(sum, item.refunded),
+    ZERO_VECTOR
+  );
+  assertVectorEqual(commitTotals, committedTotal, "commit state aggregate drift");
+  assertVectorEqual(refundTotals, refundedTotal, "refund state aggregate drift");
+  if (ownerDisposition === "ceiling") {
+    if (commitStates.length !== 0)
+      fail("DRIFT_DETECTED", "ceiling balance state cannot contain settlement commits");
+    assertVectorEqual(committedTotal, ZERO_VECTOR, "ceiling committed total must be zero");
+    assertVectorEqual(releasedTotal, ZERO_VECTOR, "ceiling released total must be zero");
+    assertVectorEqual(refundedTotal, ZERO_VECTOR, "ceiling refunded total must be zero");
+  }
+
+  return deepFreeze({
+    schemaVersion: SCHEMA_VERSION,
+    ceilingId: identifier(value.ceilingId, "budget current state ceilingId"),
+    ceilingDigest: digest(value.ceilingDigest, "budget current state ceilingDigest"),
+    ceilingRevision: nonNegativeInteger(
+      value.ceilingRevision,
+      "budget current state ceilingRevision"
+    ),
+    ownerReservationId,
+    ownerReservationReceiptDigest,
+    ownerDisposition,
+    balanceRevision: nonNegativeInteger(
+      value.balanceRevision,
+      "budget current state balanceRevision"
+    ),
+    reservationRevision,
+    reserved,
+    available,
+    committedTotal,
+    releasedTotal,
+    refundedTotal,
+    commitStates,
+    latestSettlementReceiptDigest: nullableDigest(
+      value.latestSettlementReceiptDigest,
+      "budget current state latestSettlementReceiptDigest"
+    ),
+    capturedAt: instant(value.capturedAt, "budget current state capturedAt"),
+  });
+}
+
+function commitStateValues(value: unknown): readonly Readonly<AgentOsBudgetCommitStateV1>[] {
+  const values = arrayValues(value, "budget current state commitStates").map((item, index) => {
+    const state = record(item, `budget current state commitStates[${index}]`);
+    exact(state, COMMIT_STATE_KEYS, `budget current state commitStates[${index}]`);
+    const committed = budgetVector(
+      state.committed,
+      `budget current state commitStates[${index}].committed`
+    );
+    const refunded = budgetVector(
+      state.refunded,
+      `budget current state commitStates[${index}].refunded`
+    );
+    assertVectorWithin(refunded, committed, "per-commit refund exceeds committed charge");
+    return deepFreeze({
+      commitReceiptDigest: digest(
+        state.commitReceiptDigest,
+        `budget current state commitStates[${index}].commitReceiptDigest`
+      ),
+      usageEvidenceDigest: digest(
+        state.usageEvidenceDigest,
+        `budget current state commitStates[${index}].usageEvidenceDigest`
+      ),
+      committed,
+      refunded,
+    });
+  });
+  for (let index = 1; index < values.length; index += 1) {
+    if (values[index - 1]!.commitReceiptDigest >= values[index]!.commitReceiptDigest)
+      fail("INVALID_VALUE", "commitStates must be unique and sorted by commitReceiptDigest");
+  }
+  return deepFreeze(values);
+}
+
+function settlementMutationUnsigned(
+  value: Record<string, unknown>
+): AgentOsBudgetSettlementMutationUnsignedV1 {
+  exact(value, SETTLEMENT_MUTATION_KEYS, "budget settlement mutation unsigned");
+  schema(value.schemaVersion, "budget settlement mutation");
+  return deepFreeze({
+    schemaVersion: SCHEMA_VERSION,
+    operation: settlementOperation(value.operation),
+    commandId: identifier(value.commandId, "budget settlement mutation commandId"),
+    reservationId: identifier(value.reservationId, "budget settlement mutation reservationId"),
+    reservationReceiptDigest: digest(
+      value.reservationReceiptDigest,
+      "budget settlement mutation reservationReceiptDigest"
+    ),
+    previousStateDigest: digest(
+      value.previousStateDigest,
+      "budget settlement mutation previousStateDigest"
+    ),
+    expectedReservationRevision: positiveInteger(
+      value.expectedReservationRevision,
+      "budget settlement mutation expectedReservationRevision"
+    ),
+    amount: budgetVector(value.amount, "budget settlement mutation amount"),
+    sourceCommitReceiptDigest: nullableDigest(
+      value.sourceCommitReceiptDigest,
+      "budget settlement mutation sourceCommitReceiptDigest"
+    ),
+    usageEvidenceDigest: nullableDigest(
+      value.usageEvidenceDigest,
+      "budget settlement mutation usageEvidenceDigest"
+    ),
+    correctionEvidenceDigest: nullableDigest(
+      value.correctionEvidenceDigest,
+      "budget settlement mutation correctionEvidenceDigest"
+    ),
+    occurredAt: instant(value.occurredAt, "budget settlement mutation occurredAt"),
+  });
+}
+
 function settlementUnsigned(
   value: Record<string, unknown>
 ): AgentOsBudgetSettlementReceiptUnsignedV1 {
@@ -724,6 +1182,11 @@ function settlementUnsigned(
       value.reservationReceiptDigest,
       "budget settlement receipt reservationReceiptDigest"
     ),
+    previousStateDigest: digest(
+      value.previousStateDigest,
+      "budget settlement receipt previousStateDigest"
+    ),
+    mutationDigest: digest(value.mutationDigest, "budget settlement receipt mutationDigest"),
     expectedReservationRevision: positiveInteger(
       value.expectedReservationRevision,
       "budget settlement receipt expectedReservationRevision"
@@ -736,6 +1199,14 @@ function settlementUnsigned(
     committedTotal: budgetVector(value.committedTotal, "budget settlement receipt committedTotal"),
     releasedTotal: budgetVector(value.releasedTotal, "budget settlement receipt releasedTotal"),
     refundedTotal: budgetVector(value.refundedTotal, "budget settlement receipt refundedTotal"),
+    sourceCommitReceiptDigest: nullableDigest(
+      value.sourceCommitReceiptDigest,
+      "budget settlement receipt sourceCommitReceiptDigest"
+    ),
+    sourceCommitRefundedTotal: nullableBudgetVector(
+      value.sourceCommitRefundedTotal,
+      "budget settlement receipt sourceCommitRefundedTotal"
+    ),
     usageEvidenceDigest: nullableDigest(
       value.usageEvidenceDigest,
       "budget settlement receipt usageEvidenceDigest"
@@ -858,6 +1329,13 @@ function budgetVector(value: unknown, label: string): Readonly<AgentOsBudgetVect
   });
 }
 
+function nullableBudgetVector(
+  value: unknown,
+  label: string
+): Readonly<AgentOsBudgetVectorV1> | null {
+  return value === null ? null : budgetVector(value, label);
+}
+
 function observation(value: unknown, label: string): Readonly<AgentOsBudgetObservationV1> {
   const input = record(value, label);
   exact(input, ["inputTokens", "outputTokens", "toolCalls", "costUsdMicros"], label);
@@ -914,6 +1392,11 @@ function settlementOperation(value: unknown): AgentOsBudgetSettlementOperationV1
   if (value !== "commit" && value !== "release" && value !== "refund")
     fail("INVALID_VALUE", "budget settlement operation is invalid");
   return value;
+}
+
+function currentStateOwnerDisposition(value: unknown): AgentOsBudgetCurrentStateOwnerDispositionV1 {
+  if (value === "ceiling" || value === "reserved" || value === "closed") return value;
+  return fail("INVALID_VALUE", "budget current state ownerDisposition is invalid");
 }
 
 function unknownReason(value: unknown, label: string): AgentOsBudgetUnknownReasonV1 {
