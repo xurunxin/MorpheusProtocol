@@ -380,15 +380,29 @@ function assertGrantInstance(
   grant: ReturnType<typeof parseAgentOsV1ExecutionGrant>,
   instance: ReturnType<typeof parseAgentOsV1ExecutionInstance>
 ): void {
+  if (grant.kind !== "remote" || grant.leaseBinding.kind !== "remote")
+    fail("DRIFT_DETECTED", "Worker lease grants must bind remote authority");
+  const leaseBinding = grant.leaseBinding;
   if (
-    grant.kind !== "remote" ||
-    grant.leaseBinding.kind !== "remote" ||
     grant.instanceId !== instance.instanceId ||
     grant.deploymentId !== instance.deploymentId ||
     grant.hostId !== instance.hostId ||
-    grant.leaseBinding.generation !== instance.generation
+    leaseBinding.generation !== instance.generation
   )
     fail("DRIFT_DETECTED", "grant and instance pins do not reconcile");
+  if (grant.audience.length !== 1 || grant.audience[0] !== grant.hostId)
+    fail("GRANT_EXPANSION", "grant audience must narrow to exactly one Worker");
+  if (grant.scope.some((entry) => !grant.sessionGrant.scope.includes(entry)))
+    fail("GRANT_EXPANSION", "grant scope exceeds the session grant scope");
+  if (
+    grant.notBefore < grant.sessionGrant.notBefore ||
+    grant.expiresAt > grant.sessionGrant.expiresAt
+  )
+    fail("GRANT_EXPANSION", "grant validity exceeds the session grant validity");
+  if (grant.scope.some((entry) => !leaseBinding.scope.includes(entry)))
+    fail("GRANT_EXPANSION", "grant scope exceeds the remote lease scope");
+  if (grant.notBefore < leaseBinding.notBefore || grant.expiresAt > leaseBinding.expiresAt)
+    fail("GRANT_EXPANSION", "grant validity exceeds the remote lease validity");
 }
 
 function assertAuthorityPins(
@@ -423,6 +437,9 @@ function assertEnvelopePayloadPins(input: {
   readonly payload: Readonly<AgentOsWorkerLeaseV1Payload>;
 }): void {
   const payload = input.payload;
+  const claim = claimAuthority(input.operation, payload);
+  if (claim !== null && claim.expiresAt <= input.requestedAt)
+    fail("DRIFT_DETECTED", "claim is expired at the envelope request time");
   if (input.operation === "worker.availability") {
     const availability = payload as AgentOsWorkerLeaseV1AvailabilityPayload;
     if (
@@ -447,7 +464,8 @@ function assertEnvelopePayloadPins(input: {
       authority.grant.tenantId !== input.tenantId ||
       authority.grant.workloadId !== input.workloadId ||
       authority.grant.hostId !== input.workerId ||
-      !authority.grant.audience.includes(input.workerId)
+      authority.grant.audience.length !== 1 ||
+      authority.grant.audience[0] !== input.workerId
     )
       fail("GRANT_EXPANSION", "envelope authority expands or drifts from the grant");
     if (
@@ -460,12 +478,6 @@ function assertEnvelopePayloadPins(input: {
       const offer = authority as AgentOsWorkerLeaseV1PlacementOfferPayload;
       if (offer.manifest.capabilityDigest !== offer.grant.capabilityDigest)
         fail("GRANT_EXPANSION", "Worker capability manifest does not match the authorized grant");
-    } else {
-      const claimed = authority as
-        | AgentOsWorkerLeaseV1ClaimRequestPayload
-        | AgentOsWorkerLeaseV1RenewPayload;
-      if (claimed.claim.expiresAt <= input.requestedAt)
-        fail("DRIFT_DETECTED", "claim is expired at the envelope request time");
     }
   }
   if (input.operation === "execution.progress") {
@@ -482,6 +494,33 @@ function assertEnvelopePayloadPins(input: {
     const drain = payload as AgentOsWorkerLeaseV1DrainPayload;
     if (drain.deadline > input.deadline)
       fail("DRIFT_DETECTED", "drain deadline exceeds the envelope deadline");
+  }
+}
+
+function claimAuthority(
+  operation: AgentOsWorkerLeaseV1Operation,
+  payload: Readonly<AgentOsWorkerLeaseV1Payload>
+): ReturnType<typeof parseAgentOsV1ExecutionClaimBinding> | null {
+  switch (operation) {
+    case "claim.request":
+      return (payload as AgentOsWorkerLeaseV1ClaimRequestPayload).claim;
+    case "claim.ack": {
+      const acknowledgement = payload as AgentOsWorkerLeaseV1ClaimAckPayload;
+      return acknowledgement.accepted ? acknowledgement.claim : null;
+    }
+    case "lease.renew":
+      return (payload as AgentOsWorkerLeaseV1RenewPayload).claim;
+    case "execution.progress":
+      return (payload as AgentOsWorkerLeaseV1ProgressPayload).claim;
+    case "execution.result":
+      return (payload as AgentOsWorkerLeaseV1ResultPayload).claim;
+    case "execution.cancel":
+      return (payload as AgentOsWorkerLeaseV1CancelPayload).claim;
+    case "worker.availability":
+    case "placement.offer":
+    case "worker.drain":
+    case "worker.quarantine":
+      return null;
   }
 }
 

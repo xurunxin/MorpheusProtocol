@@ -332,6 +332,99 @@ describe("agent-os-worker-lease/v1 strict contract", () => {
     ).toThrow("DRIFT_DETECTED");
   });
 
+  test("rejects Grant audience, scope and validity expansion", () => {
+    const offer = (expandedGrant: ExecutionGrant) =>
+      envelope("placement.offer", {
+        commandId: "command.offer",
+        grant: expandedGrant,
+        instance,
+        manifest,
+        offeredAt: "2026-08-07T00:01:00.000Z",
+        expiresAt: "2026-08-07T00:09:00.000Z",
+      });
+
+    expect(() => offer({ ...grant, audience: ["worker-1", "worker-2"] })).toThrow(
+      "GRANT_EXPANSION"
+    );
+    expect(() =>
+      offer({
+        ...grant,
+        scope: ["workspace.read", "workspace.write"],
+        leaseBinding: {
+          ...grant.leaseBinding,
+          scope: ["workspace.read", "workspace.write"],
+        },
+      })
+    ).toThrow("GRANT_EXPANSION");
+    expect(() =>
+      offer({
+        ...grant,
+        scope: ["workspace.read", "workspace.write"],
+        sessionGrant: {
+          ...grant.sessionGrant,
+          scope: ["workspace.read", "workspace.write"],
+        },
+      })
+    ).toThrow("GRANT_EXPANSION");
+    expect(() =>
+      offer({
+        ...grant,
+        sessionGrant: {
+          ...grant.sessionGrant,
+          expiresAt: "2026-08-07T00:09:00.000Z",
+        },
+      })
+    ).toThrow("GRANT_EXPANSION");
+    expect(() =>
+      offer({
+        ...grant,
+        leaseBinding: {
+          ...grant.leaseBinding,
+          notBefore: "2026-08-07T00:00:01.000Z",
+        },
+      })
+    ).toThrow("GRANT_EXPANSION");
+  });
+
+  test("rejects an expired claim for ack, progress and result", () => {
+    const expiredClaim = { ...claim, expiresAt: "2026-08-07T00:01:00.000Z" };
+    expect(() =>
+      envelope("claim.ack", {
+        commandId: "command.claim",
+        claim: expiredClaim,
+        accepted: true,
+        rejection: null,
+      })
+    ).toThrow("DRIFT_DETECTED");
+    expect(() =>
+      envelope("execution.progress", {
+        commandId: "command.progress",
+        claim: expiredClaim,
+        revision: 1,
+        progressDigest: digest("progress"),
+        observedAt: "2026-08-07T00:02:00.000Z",
+      })
+    ).toThrow("DRIFT_DETECTED");
+    expect(() =>
+      envelope("execution.result", {
+        commandId: "command.result",
+        claim: expiredClaim,
+        status: "succeeded",
+        resultDigest: digest("result"),
+        artifactDigest: digest("artifact"),
+        completedAt: "2026-08-07T00:03:00.000Z",
+      })
+    ).toThrow("DRIFT_DETECTED");
+    expect(
+      envelope("claim.ack", {
+        commandId: "command.claim",
+        claim: expiredClaim,
+        accepted: false,
+        rejection: "expired",
+      }).payload
+    ).toMatchObject({ accepted: false, rejection: "expired" });
+  });
+
   test("rejects unsafe counters, invalid time windows and inconsistent terminal facts", () => {
     const valid = envelope("worker.availability", availability);
     expect(() =>
