@@ -19,10 +19,39 @@ export class AgentOsWorkerLeaseV1ReferenceError extends Error {
 
 export interface AgentOsWorkerLeaseV1Transport {
   readonly dispatch: (request: Readonly<AgentOsWorkerLeaseV1Envelope>) => Promise<unknown>;
+  readonly readCheckpoint: (
+    request: Readonly<AgentOsWorkerLeaseV1CheckpointRequest>
+  ) => Promise<unknown>;
 }
 
 export interface AgentOsWorkerLeaseV1ReferenceClient {
   readonly dispatch: (request: unknown) => Promise<Readonly<AgentOsWorkerLeaseV1Envelope>>;
+  readonly readCheckpoint: (
+    request: AgentOsWorkerLeaseV1CheckpointRequestInput
+  ) => Promise<Readonly<AgentOsWorkerLeaseV1Checkpoint>>;
+}
+
+export interface AgentOsWorkerLeaseV1CheckpointRequestInput {
+  readonly controlId: string;
+  readonly tenantId: string;
+  readonly workloadId: string;
+  readonly workerId: string;
+  readonly sender: "worker";
+}
+
+export interface AgentOsWorkerLeaseV1CheckpointRequest extends AgentOsWorkerLeaseV1CheckpointRequestInput {
+  readonly schemaVersion: "agent-os-worker-lease-checkpoint-request/v1";
+}
+
+export interface AgentOsWorkerLeaseV1CheckpointInput extends AgentOsWorkerLeaseV1CheckpointRequestInput {
+  readonly sequence: number;
+  readonly lastMessageId: string | null;
+  readonly leaderTerm: number;
+  readonly observedAt: string;
+}
+
+export interface AgentOsWorkerLeaseV1Checkpoint extends AgentOsWorkerLeaseV1CheckpointInput {
+  readonly schemaVersion: "agent-os-worker-lease-checkpoint/v1";
 }
 
 export type AgentOsWorkerLeaseV1ReferenceHandler = (
@@ -37,21 +66,59 @@ export function createAgentOsWorkerLeaseV1ReferenceClient(
       "TRANSPORT_FAILURE",
       "an injected dispatch function is required"
     );
+  if (typeof transport.readCheckpoint !== "function")
+    throw new AgentOsWorkerLeaseV1ReferenceError(
+      "TRANSPORT_FAILURE",
+      "an injected checkpoint reader is required"
+    );
   return Object.freeze({
     async dispatch(request: unknown) {
       const parsedRequest = parseAgentOsWorkerLeaseV1Envelope(request);
       let rawResponse: unknown;
       try {
         rawResponse = await transport.dispatch(parsedRequest);
-      } catch (error) {
+      } catch {
         throw new AgentOsWorkerLeaseV1ReferenceError(
           "TRANSPORT_FAILURE",
-          "injected dispatch failed",
-          { cause: error }
+          "injected dispatch failed"
         );
       }
       return assertCorrelatedResponse(parsedRequest, rawResponse);
     },
+    async readCheckpoint(requestInput: AgentOsWorkerLeaseV1CheckpointRequestInput) {
+      const request = parseCheckpointRequest(requestInput);
+      let rawResponse: unknown;
+      try {
+        rawResponse = await transport.readCheckpoint(request);
+      } catch {
+        throw new AgentOsWorkerLeaseV1ReferenceError(
+          "TRANSPORT_FAILURE",
+          "injected checkpoint read failed"
+        );
+      }
+      const response = parseCheckpoint(rawResponse);
+      if (
+        response.controlId !== request.controlId ||
+        response.tenantId !== request.tenantId ||
+        response.workloadId !== request.workloadId ||
+        response.workerId !== request.workerId ||
+        response.sender !== request.sender
+      )
+        throw new AgentOsWorkerLeaseV1ReferenceError(
+          "DRIFT_DETECTED",
+          "checkpoint does not preserve the requested Worker authority pins"
+        );
+      return response;
+    },
+  });
+}
+
+export function createAgentOsWorkerLeaseV1Checkpoint(
+  input: AgentOsWorkerLeaseV1CheckpointInput
+): Readonly<AgentOsWorkerLeaseV1Checkpoint> {
+  return parseCheckpoint({
+    schemaVersion: "agent-os-worker-lease-checkpoint/v1",
+    ...input,
   });
 }
 
@@ -125,6 +192,93 @@ function assertCorrelatedResponse(
       "response does not preserve request correlation and authority pins"
     );
   return response;
+}
+
+function parseCheckpointRequest(input: unknown): Readonly<AgentOsWorkerLeaseV1CheckpointRequest> {
+  const value = requireExactRecord(input, [
+    "controlId",
+    "tenantId",
+    "workloadId",
+    "workerId",
+    "sender",
+  ]);
+  const request = {
+    schemaVersion: "agent-os-worker-lease-checkpoint-request/v1" as const,
+    controlId: requireNonEmptyString(value.controlId, "controlId"),
+    tenantId: requireNonEmptyString(value.tenantId, "tenantId"),
+    workloadId: requireNonEmptyString(value.workloadId, "workloadId"),
+    workerId: requireNonEmptyString(value.workerId, "workerId"),
+    sender: value.sender,
+  };
+  if (request.sender !== "worker") invalidCheckpoint("sender must be worker");
+  return Object.freeze({ ...request, sender: "worker" });
+}
+
+function parseCheckpoint(input: unknown): Readonly<AgentOsWorkerLeaseV1Checkpoint> {
+  const value = requireExactRecord(input, [
+    "schemaVersion",
+    "controlId",
+    "tenantId",
+    "workloadId",
+    "workerId",
+    "sender",
+    "sequence",
+    "lastMessageId",
+    "leaderTerm",
+    "observedAt",
+  ]);
+  if (value.schemaVersion !== "agent-os-worker-lease-checkpoint/v1")
+    invalidCheckpoint("schemaVersion is invalid");
+  if (value.sender !== "worker") invalidCheckpoint("sender must be worker");
+  if (!Number.isSafeInteger(value.sequence) || (value.sequence as number) < 0)
+    invalidCheckpoint("sequence must be a non-negative safe integer");
+  if (!Number.isSafeInteger(value.leaderTerm) || (value.leaderTerm as number) <= 0)
+    invalidCheckpoint("leaderTerm must be a positive safe integer");
+  if (
+    (value.sequence === 0 && value.lastMessageId !== null) ||
+    (value.sequence !== 0 &&
+      (typeof value.lastMessageId !== "string" || value.lastMessageId.length === 0))
+  )
+    invalidCheckpoint("lastMessageId must be null exactly at sequence zero");
+  const observedAt = requireNonEmptyString(value.observedAt, "observedAt");
+  if (new Date(observedAt).toISOString() !== observedAt)
+    invalidCheckpoint("observedAt must be a canonical timestamp");
+  return Object.freeze({
+    schemaVersion: "agent-os-worker-lease-checkpoint/v1",
+    controlId: requireNonEmptyString(value.controlId, "controlId"),
+    tenantId: requireNonEmptyString(value.tenantId, "tenantId"),
+    workloadId: requireNonEmptyString(value.workloadId, "workloadId"),
+    workerId: requireNonEmptyString(value.workerId, "workerId"),
+    sender: "worker",
+    sequence: value.sequence as number,
+    lastMessageId: value.lastMessageId as string | null,
+    leaderTerm: value.leaderTerm as number,
+    observedAt,
+  });
+}
+
+function requireExactRecord(input: unknown, keys: readonly string[]): Record<string, unknown> {
+  if (input === null || typeof input !== "object" || Array.isArray(input))
+    invalidCheckpoint("value must be an object");
+  const value = input as Record<string, unknown>;
+  const actualKeys = Object.keys(value).sort();
+  const expectedKeys = [...keys].sort();
+  if (
+    actualKeys.length !== expectedKeys.length ||
+    actualKeys.some((key, index) => key !== expectedKeys[index])
+  )
+    invalidCheckpoint("value has missing or unknown fields");
+  return value;
+}
+
+function requireNonEmptyString(value: unknown, field: string): string {
+  if (typeof value !== "string" || value.length === 0)
+    invalidCheckpoint(`${field} must be a non-empty string`);
+  return value;
+}
+
+function invalidCheckpoint(message: string): never {
+  throw new AgentOsWorkerLeaseV1ReferenceError("INVALID_RESULT", message);
 }
 
 function assertScenarioResult(

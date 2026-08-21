@@ -5,6 +5,7 @@ import { createAgentOsWorkerLeaseV1Envelope } from "../src/agent-os-worker-lease
 import {
   AGENT_OS_WORKER_LEASE_V1_CONFORMANCE_SCENARIOS,
   AgentOsWorkerLeaseV1ReferenceError,
+  createAgentOsWorkerLeaseV1Checkpoint,
   createAgentOsWorkerLeaseV1ReferenceClient,
   dispatchAgentOsWorkerLeaseV1Reference,
   runAgentOsWorkerLeaseV1Conformance,
@@ -87,10 +88,27 @@ function resourceHealth() {
   });
 }
 
+function checkpoint(sequence = 0, lastMessageId: string | null = null) {
+  return createAgentOsWorkerLeaseV1Checkpoint({
+    controlId: "control",
+    tenantId: "tenant.demo",
+    workloadId: "workload.demo",
+    workerId: "worker-1",
+    sender: "worker",
+    sequence,
+    lastMessageId,
+    leaderTerm: 1,
+    observedAt: "2026-08-07T00:00:00.000Z",
+  });
+}
+
+const readCheckpoint = () => Promise.resolve(checkpoint());
+
 describe("agent-os-worker-lease/v1 reference layer", () => {
   test("dispatches only through an injected transport and preserves correlation", async () => {
     let calls = 0;
     const client = createAgentOsWorkerLeaseV1ReferenceClient({
+      readCheckpoint,
       dispatch(request) {
         calls += 1;
         return Promise.resolve(request);
@@ -105,6 +123,7 @@ describe("agent-os-worker-lease/v1 reference layer", () => {
   test("dispatches resource health once without owning retry or changing correlation", async () => {
     let calls = 0;
     const client = createAgentOsWorkerLeaseV1ReferenceClient({
+      readCheckpoint,
       dispatch(request) {
         calls += 1;
         return Promise.resolve(request);
@@ -127,10 +146,63 @@ describe("agent-os-worker-lease/v1 reference layer", () => {
     ).rejects.toBeInstanceOf(Error);
   });
 
+  test("reads a strict Worker sender checkpoint through the injected transport", async () => {
+    let calls = 0;
+    const client = createAgentOsWorkerLeaseV1ReferenceClient({
+      dispatch: (request) => Promise.resolve(request),
+      readCheckpoint(request) {
+        calls += 1;
+        expect(request).toEqual({
+          schemaVersion: "agent-os-worker-lease-checkpoint-request/v1",
+          controlId: "control",
+          tenantId: "tenant.demo",
+          workloadId: "workload.demo",
+          workerId: "worker-1",
+          sender: "worker",
+        });
+        return Promise.resolve(checkpoint(2, "message.2"));
+      },
+    });
+
+    await expect(
+      client.readCheckpoint({
+        controlId: "control",
+        tenantId: "tenant.demo",
+        workloadId: "workload.demo",
+        workerId: "worker-1",
+        sender: "worker",
+      })
+    ).resolves.toEqual(checkpoint(2, "message.2"));
+    expect(calls).toBe(1);
+  });
+
+  test("fails closed on malformed, uncorrelated, or impossible checkpoints", async () => {
+    const request = {
+      controlId: "control",
+      tenantId: "tenant.demo",
+      workloadId: "workload.demo",
+      workerId: "worker-1",
+      sender: "worker" as const,
+    };
+    for (const response of [
+      { ...checkpoint(), token: "secret" },
+      { ...checkpoint(), workerId: "worker-2" },
+      { ...checkpoint(1, "message.1"), lastMessageId: null },
+      { ...checkpoint(), lastMessageId: "message.0" },
+    ]) {
+      const client = createAgentOsWorkerLeaseV1ReferenceClient({
+        dispatch: (value) => Promise.resolve(value),
+        readCheckpoint: () => Promise.resolve(response),
+      });
+      await expect(client.readCheckpoint(request)).rejects.toBeInstanceOf(Error);
+    }
+  });
+
   test("rejects response authority and correlation drift", async () => {
     const request = availability();
     const different = availability(2, 1, "correlation.other");
     const client = createAgentOsWorkerLeaseV1ReferenceClient({
+      readCheckpoint,
       dispatch: () => Promise.resolve(different),
     });
     await expect(client.dispatch(request)).rejects.toBeInstanceOf(
@@ -141,14 +213,16 @@ describe("agent-os-worker-lease/v1 reference layer", () => {
   test("wraps injected transport failures without owning retry", async () => {
     let calls = 0;
     const client = createAgentOsWorkerLeaseV1ReferenceClient({
+      readCheckpoint,
       dispatch() {
         calls += 1;
         return Promise.reject(new Error("partition"));
       },
     });
-    await expect(client.dispatch(availability())).rejects.toMatchObject({
-      code: "TRANSPORT_FAILURE",
-    });
+    const error = await client.dispatch(availability()).catch((reason: unknown) => reason);
+    expect(error).toMatchObject({ code: "TRANSPORT_FAILURE" });
+    expect(error).not.toHaveProperty("cause");
+    expect(JSON.stringify(error)).not.toContain("partition");
     expect(calls).toBe(1);
   });
 
