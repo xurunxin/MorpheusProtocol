@@ -119,6 +119,7 @@ function envelope<Operation extends AgentOsWorkerLeaseV1Operation>(
       operation === "worker.availability" ||
       operation === "claim.request" ||
       operation === "execution.progress" ||
+      operation === "execution.resource-health" ||
       operation === "execution.result"
         ? "worker"
         : "control",
@@ -186,6 +187,17 @@ describe("agent-os-worker-lease/v1 strict contract", () => {
         6
       ),
       envelope(
+        "execution.resource-health",
+        {
+          commandId: "command.resource-health",
+          claim,
+          revision: 1,
+          acquiredResourceCount: 2,
+          observedAt: "2026-08-07T00:02:30.000Z",
+        },
+        7
+      ),
+      envelope(
         "execution.result",
         {
           commandId: "command.result",
@@ -195,12 +207,12 @@ describe("agent-os-worker-lease/v1 strict contract", () => {
           artifactDigest: digest("artifact"),
           completedAt: "2026-08-07T00:03:00.000Z",
         },
-        7
+        8
       ),
       envelope(
         "execution.cancel",
         { commandId: "command.cancel", claim, reasonDigest: digest("cancel") },
-        8
+        9
       ),
       envelope(
         "worker.drain",
@@ -210,7 +222,7 @@ describe("agent-os-worker-lease/v1 strict contract", () => {
           reasonDigest: digest("drain"),
           deadline: "2026-08-07T00:08:00.000Z",
         },
-        9
+        10
       ),
       envelope(
         "worker.quarantine",
@@ -220,7 +232,7 @@ describe("agent-os-worker-lease/v1 strict contract", () => {
           reason: "artifact_corrupt",
           evidenceDigest: digest("evidence"),
         },
-        10
+        11
       ),
     ];
 
@@ -231,6 +243,7 @@ describe("agent-os-worker-lease/v1 strict contract", () => {
       "claim.ack",
       "lease.renew",
       "execution.progress",
+      "execution.resource-health",
       "execution.result",
       "execution.cancel",
       "worker.drain",
@@ -238,8 +251,8 @@ describe("agent-os-worker-lease/v1 strict contract", () => {
     ]);
     expect(messages.every((message) => Object.isFrozen(message))).toBe(true);
     expect(messages.every((message) => Object.isFrozen(message.payload))).toBe(true);
-    expect(new Set(messages.map((message) => message.payloadDigest)).size).toBe(10);
-    expect(new Set(messages.map((message) => message.envelopeDigest)).size).toBe(10);
+    expect(new Set(messages.map((message) => message.payloadDigest)).size).toBe(11);
+    expect(new Set(messages.map((message) => message.envelopeDigest)).size).toBe(11);
   });
 
   test("is deterministic and does not mutate the immutable agent-os/v1 fixture", () => {
@@ -475,5 +488,86 @@ describe("agent-os-worker-lease/v1 strict contract", () => {
         },
       })
     ).toThrow("DRIFT_DETECTED");
+  });
+
+  test("rejects unsafe or authority-drifting resource health observations", () => {
+    const resourceHealth = {
+      commandId: "command.resource-health",
+      claim,
+      revision: 1,
+      acquiredResourceCount: 2,
+      observedAt: "2026-08-07T00:02:00.000Z",
+    };
+    const valid = envelope("execution.resource-health", resourceHealth);
+
+    for (const forbidden of [
+      "resources",
+      "identity",
+      "data",
+      "token",
+      "path",
+      "payload",
+      "errorText",
+    ]) {
+      expect(() =>
+        envelope("execution.resource-health", {
+          ...resourceHealth,
+          [forbidden]: "forbidden",
+        } as never)
+      ).toThrow(AgentOsWorkerLeaseV1ContractError);
+    }
+    expect(() => envelope("execution.resource-health", { ...resourceHealth, revision: 0 })).toThrow(
+      AgentOsWorkerLeaseV1ContractError
+    );
+    expect(() =>
+      envelope("execution.resource-health", { ...resourceHealth, acquiredResourceCount: -1 })
+    ).toThrow(AgentOsWorkerLeaseV1ContractError);
+    expect(() =>
+      envelope("execution.resource-health", {
+        ...resourceHealth,
+        acquiredResourceCount: Number.MAX_SAFE_INTEGER + 1,
+      })
+    ).toThrow(AgentOsWorkerLeaseV1ContractError);
+    expect(() =>
+      envelope("execution.resource-health", {
+        ...resourceHealth,
+        observedAt: "2026-08-07T00:00:59.999Z",
+      })
+    ).toThrow("DRIFT_DETECTED");
+    expect(() =>
+      envelope("execution.resource-health", {
+        ...resourceHealth,
+        observedAt: "2026-08-07T00:09:00.001Z",
+      })
+    ).toThrow("DRIFT_DETECTED");
+    expect(() =>
+      envelope("execution.resource-health", {
+        ...resourceHealth,
+        claim: { ...claim, expiresAt: "2026-08-07T00:01:00.000Z" },
+      })
+    ).toThrow("DRIFT_DETECTED");
+    expect(() =>
+      createAgentOsWorkerLeaseV1Envelope({
+        operation: "execution.resource-health",
+        sender: "control",
+        messageId: "message.resource-health.wrong-sender",
+        correlationId: "correlation.demo",
+        sequence: 1,
+        leaderTerm: 2,
+        controlId: "control",
+        tenantId: "tenant.demo",
+        workloadId: "workload.demo",
+        workerId: "worker-1",
+        requestedAt: "2026-08-07T00:01:00.000Z",
+        deadline: "2026-08-07T00:09:00.000Z",
+        payload: resourceHealth,
+      })
+    ).toThrow("DRIFT_DETECTED");
+    expect(() =>
+      parseAgentOsWorkerLeaseV1Envelope({ ...valid, payloadDigest: digest("forged") })
+    ).toThrow("DIGEST_MISMATCH");
+    expect(() =>
+      parseAgentOsWorkerLeaseV1Envelope({ ...valid, operation: "execution.progress" })
+    ).toThrow(AgentOsWorkerLeaseV1ContractError);
   });
 });

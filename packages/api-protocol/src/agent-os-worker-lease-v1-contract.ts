@@ -20,6 +20,7 @@ import type {
   AgentOsWorkerLeaseV1ProgressPayload,
   AgentOsWorkerLeaseV1QuarantinePayload,
   AgentOsWorkerLeaseV1QuarantineReason,
+  AgentOsWorkerLeaseV1ResourceHealthPayload,
   AgentOsWorkerLeaseV1RenewPayload,
   AgentOsWorkerLeaseV1ResultPayload,
   AgentOsWorkerLeaseV1WorkloadIdentity,
@@ -166,6 +167,8 @@ function parsePayload(
       return renewPayload(input);
     case "execution.progress":
       return progressPayload(input);
+    case "execution.resource-health":
+      return resourceHealthPayload(input);
     case "execution.result":
       return resultPayload(input);
     case "execution.cancel":
@@ -283,6 +286,25 @@ function progressPayload(input: unknown): Readonly<AgentOsWorkerLeaseV1ProgressP
     claim: parseAgentOsV1ExecutionClaimBinding(value.claim),
     revision: positiveInteger(value.revision, "revision"),
     progressDigest: digest(value.progressDigest, "progressDigest"),
+    observedAt: instant(value.observedAt, "observedAt"),
+  });
+}
+
+function resourceHealthPayload(
+  input: unknown
+): Readonly<AgentOsWorkerLeaseV1ResourceHealthPayload> {
+  const value = payloadRecord(input, [
+    "commandId",
+    "claim",
+    "revision",
+    "acquiredResourceCount",
+    "observedAt",
+  ]);
+  return deepFreeze({
+    commandId: identifier(value.commandId, "commandId"),
+    claim: parseAgentOsV1ExecutionClaimBinding(value.claim),
+    revision: positiveInteger(value.revision, "revision"),
+    acquiredResourceCount: nonNegativeInteger(value.acquiredResourceCount, "acquiredResourceCount"),
     observedAt: instant(value.observedAt, "observedAt"),
   });
 }
@@ -485,6 +507,11 @@ function assertEnvelopePayloadPins(input: {
     if (progress.observedAt < input.requestedAt || progress.observedAt > input.deadline)
       fail("DRIFT_DETECTED", "progress timestamp exceeds the envelope window");
   }
+  if (input.operation === "execution.resource-health") {
+    const resourceHealth = payload as AgentOsWorkerLeaseV1ResourceHealthPayload;
+    if (resourceHealth.observedAt < input.requestedAt || resourceHealth.observedAt > input.deadline)
+      fail("DRIFT_DETECTED", "resource health timestamp exceeds the envelope window");
+  }
   if (input.operation === "execution.result") {
     const result = payload as AgentOsWorkerLeaseV1ResultPayload;
     if (result.completedAt < input.requestedAt || result.completedAt > input.deadline)
@@ -512,6 +539,8 @@ function claimAuthority(
       return (payload as AgentOsWorkerLeaseV1RenewPayload).claim;
     case "execution.progress":
       return (payload as AgentOsWorkerLeaseV1ProgressPayload).claim;
+    case "execution.resource-health":
+      return (payload as AgentOsWorkerLeaseV1ResourceHealthPayload).claim;
     case "execution.result":
       return (payload as AgentOsWorkerLeaseV1ResultPayload).claim;
     case "execution.cancel":
@@ -538,6 +567,7 @@ function workerLeaseOperation(input: unknown): AgentOsWorkerLeaseV1Operation {
     case "claim.ack":
     case "lease.renew":
     case "execution.progress":
+    case "execution.resource-health":
     case "execution.result":
     case "execution.cancel":
     case "worker.drain":
@@ -561,6 +591,7 @@ function assertOperationSender(
     operation === "worker.availability" ||
     operation === "claim.request" ||
     operation === "execution.progress" ||
+    operation === "execution.resource-health" ||
     operation === "execution.result"
       ? "worker"
       : "control";

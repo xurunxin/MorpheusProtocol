@@ -13,6 +13,7 @@ export type AgentOsWorkerLeaseV1Operation =
   | "claim.ack"
   | "lease.renew"
   | "execution.progress"
+  | "execution.resource-health"
   | "execution.result"
   | "execution.cancel"
   | "worker.drain"
@@ -91,6 +92,14 @@ export interface AgentOsWorkerLeaseV1ProgressPayload {
   readonly observedAt: string;
 }
 
+export interface AgentOsWorkerLeaseV1ResourceHealthPayload {
+  readonly commandId: string;
+  readonly claim: Readonly<ExecutionClaimBinding>;
+  readonly revision: number;
+  readonly acquiredResourceCount: number;
+  readonly observedAt: string;
+}
+
 export interface AgentOsWorkerLeaseV1ResultPayload {
   readonly commandId: string;
   readonly claim: Readonly<ExecutionClaimBinding>;
@@ -133,6 +142,7 @@ export type AgentOsWorkerLeaseV1PayloadByOperation = Readonly<{
   "claim.ack": AgentOsWorkerLeaseV1ClaimAckPayload;
   "lease.renew": AgentOsWorkerLeaseV1RenewPayload;
   "execution.progress": AgentOsWorkerLeaseV1ProgressPayload;
+  "execution.resource-health": AgentOsWorkerLeaseV1ResourceHealthPayload;
   "execution.result": AgentOsWorkerLeaseV1ResultPayload;
   "execution.cancel": AgentOsWorkerLeaseV1CancelPayload;
   "worker.drain": AgentOsWorkerLeaseV1DrainPayload;

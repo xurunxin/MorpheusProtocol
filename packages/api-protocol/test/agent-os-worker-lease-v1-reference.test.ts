@@ -48,6 +48,45 @@ function availability(sequence = 1, leaderTerm = 1, correlationId = "correlation
   });
 }
 
+function resourceHealth() {
+  return createAgentOsWorkerLeaseV1Envelope({
+    operation: "execution.resource-health",
+    sender: "worker",
+    messageId: "message.resource-health.1",
+    correlationId: "correlation.resource-health",
+    sequence: 1,
+    leaderTerm: 1,
+    controlId: "control",
+    tenantId: "tenant.demo",
+    workloadId: "workload.demo",
+    workerId: "worker-1",
+    requestedAt: "2026-08-07T00:00:00.000Z",
+    deadline: "2026-08-07T00:01:00.000Z",
+    payload: {
+      commandId: "command.resource-health",
+      claim: {
+        grantId: "grant.demo",
+        leaseId: "lease.demo",
+        leaseEpoch: "lease-epoch:current",
+        authorityDomain: "authority.demo",
+        runId: "run.demo",
+        attemptId: "attempt.demo",
+        instanceId: "instance.demo",
+        instanceGeneration: 1,
+        storeId: "store.demo",
+        storeGeneration: 1,
+        writerIncarnationId: "writer.demo",
+        claimId: "claim.demo",
+        claimFence: 1,
+        expiresAt: "2026-08-07T00:02:00.000Z",
+      },
+      revision: 1,
+      acquiredResourceCount: 2,
+      observedAt: "2026-08-07T00:00:30.000Z",
+    },
+  });
+}
+
 describe("agent-os-worker-lease/v1 reference layer", () => {
   test("dispatches only through an injected transport and preserves correlation", async () => {
     let calls = 0;
@@ -60,6 +99,21 @@ describe("agent-os-worker-lease/v1 reference layer", () => {
     const request = availability();
     const response = await client.dispatch(request);
     expect(calls).toBe(1);
+    expect(response).toEqual(request);
+  });
+
+  test("dispatches resource health once without owning retry or changing correlation", async () => {
+    let calls = 0;
+    const client = createAgentOsWorkerLeaseV1ReferenceClient({
+      dispatch(request) {
+        calls += 1;
+        return Promise.resolve(request);
+      },
+    });
+    const request = resourceHealth();
+    const response = await client.dispatch(request);
+    expect(calls).toBe(1);
+    expect(response.correlationId).toBe(request.correlationId);
     expect(response).toEqual(request);
   });
 
