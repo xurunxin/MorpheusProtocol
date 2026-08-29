@@ -136,10 +136,6 @@
   ],
   "deferred": [
     {
-      "item": "Committed candidate commit/tree release receipt",
-      "reason": "the integration owner must append a separate excluded release receipt after committing the candidate, avoiding content-digest self-reference"
-    },
-    {
       "item": "GitHub repository creation and push",
       "reason": "owned by the parent cutover task; this repository task was explicitly local-only"
     },
