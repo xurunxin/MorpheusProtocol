@@ -1,0 +1,159 @@
+{
+  "schemaVersion": "morpheus-local-gate-report/v1",
+  "repository": "MorpheusProtocol",
+  "status": "PASS",
+  "recordedAt": "2026-08-30T01:00:19.6838481+08:00",
+  "sourceProvenance": {
+    "repository": "xurunxin/MorpheusCore",
+    "commit": "ae30f9ce07a0e27e63b67ba4e4db22545d19423e",
+    "tree": "d79da132627743b64e6b9398b61c8b5b5ee66231",
+    "splitInventorySha256": "92661125738df354d27b1bdccea9e64cc1bab1d20dd0e23f23b1ff11320472c8",
+    "selectedPathCount": 56,
+    "filteredRepositoryHead": "0aa42636a18e5683f2275225371db238122cddf4",
+    "filteredRepositoryHeadRole": "history-provenance",
+    "extraction": "git-filter-repo exact-path selection with history preservation"
+  },
+  "candidateContent": {
+    "algorithm": "sha256",
+    "canonicalization": "morpheus-candidate-content/v1; git tracked+unignored candidate files; UTF-8 POSIX paths byte-sorted; UTF-8 text BOM removed and CRLF/CR normalized to LF; length-prefixed path and content",
+    "digest": "ef6e0e98fbc981393ce0fc9d3e8db2b851cb4be7c304fc9df57618e51cab4481",
+    "fileCount": 92,
+    "totalBytes": 1162861,
+    "exclusions": [
+      "gates/local-gate-report.json",
+      "gates/release-receipt.json",
+      "gates/release-receipts/**",
+      "node_modules/**",
+      "**/dist/**",
+      ".tmp/**",
+      ".artifacts/**",
+      "**/*.tgz",
+      "**/*.tsbuildinfo"
+    ]
+  },
+  "releaseCandidate": {
+    "protocol": "@xurunxin/morpheus-protocol@0.2.0",
+    "sdk": "@xurunxin/morpheus-sdk@0.2.0",
+    "sdkProtocolDependency": "0.2.0",
+    "license": "Apache-2.0",
+    "registry": "https://npm.pkg.github.com",
+    "distTag": "next"
+  },
+  "commands": [
+    {
+      "command": "bun install --frozen-lockfile (NODE_AUTH_TOKEN unset)",
+      "status": "PASS",
+      "evidence": "Bun 1.3.14 installed the root toolchain without registry authentication, workspace links, or lockfile changes"
+    },
+    {
+      "command": "bun run typecheck",
+      "status": "PASS",
+      "evidence": "TypeScript composite production declarations"
+    },
+    {
+      "command": "bun run test",
+      "status": "PASS",
+      "evidence": "270 passed, 0 failed, 1387 assertions across 24 files, including offline publish reconciliation, pack validation, release dependency, and candidate digest suites"
+    },
+    {
+      "command": "bun run lint",
+      "status": "PASS"
+    },
+    {
+      "command": "bun run check:boundaries",
+      "status": "PASS",
+      "evidence": "Protocol has no production dependency; SDK imports only Protocol and local modules; no legacy package identity"
+    },
+    {
+      "command": "bun run check:release-dependencies",
+      "status": "PASS",
+      "evidence": "production manifests and committed bun.lock contain no workspace:, file:, link:, portal:, or Git dependency locators; root node_modules contains no local package link"
+    },
+    {
+      "command": "bun run check:candidate",
+      "status": "PASS",
+      "evidence": "canonical candidate source/config/workflow digest matched the GateReport; filteredRepositoryHead is retained only as extraction provenance"
+    },
+    {
+      "command": "bun run test:packed-consumer",
+      "status": "PASS",
+      "evidence": "empty consumer installed both tarballs, removed node_modules, reinstalled with --frozen-lockfile, and imported public entrypoints"
+    },
+    {
+      "command": "bun run verify",
+      "status": "PASS",
+      "evidence": "format, lint, typecheck, build, 270 tests, boundary, release dependency, canonical candidate, and packed-consumer gates"
+    },
+    {
+      "command": "bun run pack (two consecutive runs)",
+      "status": "PASS",
+      "evidence": "both tarball SHA-256 values were byte-for-byte stable"
+    }
+  ],
+  "protocolGateEvidence": {
+    "strictParser": "PASS",
+    "unknownFieldRejection": "PASS",
+    "unsupportedVersionRejection": "PASS",
+    "canonicalDigest": "PASS",
+    "versionNegotiation": "PASS",
+    "extensionManifestContract": "PASS",
+    "wireIdentityChanged": false
+  },
+  "publicationGateEvidence": {
+    "allPackagePreflightBeforeMutation": "PASS",
+    "missingPublishAndPostPublishReadback": "PASS",
+    "existingIntegrityMatchSkip": "PASS",
+    "existingIntegrityMismatchFail": "PASS",
+    "publishRaceReconciliation": "PASS",
+    "twoPackageConfirmationBeforeNext": "PASS",
+    "partialTagResume": "PASS",
+    "completedRerunNoOp": "PASS",
+    "nextRollbackRefusal": "PASS",
+    "packManifestContainmentAndDigest": "PASS",
+    "networkActivityDuringTests": false
+  },
+  "artifacts": [
+    {
+      "name": "@xurunxin/morpheus-protocol",
+      "version": "0.2.0",
+      "filename": "xurunxin-morpheus-protocol-0.2.0.tgz",
+      "sha256": "4aea0a452c0433b74c97b84910ee70c0cf97fa502f35a955c1c6f4667ba47b69",
+      "integrity": "sha512-MA+lg679F7B3VJbszPi39lfStvJhz/2TmsYXfXs6aAoz4Akuiyvs/yZDyxt98qk1bXvNfhpvQbl+K2xnD1SKDw==",
+      "size": 128733,
+      "unpackedSize": 768357,
+      "fileCount": 61
+    },
+    {
+      "name": "@xurunxin/morpheus-sdk",
+      "version": "0.2.0",
+      "filename": "xurunxin-morpheus-sdk-0.2.0.tgz",
+      "sha256": "cbc98df773a79cfd90993cb5519c071d6e2b07af829454ee0ee6fb3aae11edc3",
+      "integrity": "sha512-5z9w40yumQLe4fRzx0MbNTkJYrGWreB5S9P7mhUvxE+Clvq1iow3JYh9rromSuQsR812L5biWpjty1ahEj6fzQ==",
+      "size": 8998,
+      "unpackedSize": 28778,
+      "fileCount": 15
+    }
+  ],
+  "deferred": [
+    {
+      "item": "Committed candidate commit/tree release receipt",
+      "reason": "the integration owner must append a separate excluded release receipt after committing the candidate, avoiding content-digest self-reference"
+    },
+    {
+      "item": "GitHub repository creation and push",
+      "reason": "owned by the parent cutover task; this repository task was explicitly local-only"
+    },
+    {
+      "item": "GitHub Packages publication and authenticated fresh-registry install",
+      "reason": "requires the public remote repository, a version tag and registry-side package permissions"
+    },
+    {
+      "item": "GitHub-hosted provenance attestation",
+      "reason": "tag-only workflow is configured but cannot execute before the remote and tag exist"
+    },
+    {
+      "item": "latest dist-tag promotion",
+      "reason": "reserved for MorpheusIntegration acceptance of an exact release lock"
+    }
+  ]
+}

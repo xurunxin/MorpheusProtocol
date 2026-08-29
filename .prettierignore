@@ -1,0 +1,3 @@
+bun.lock
+packages/*/dist
+.artifacts

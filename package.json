@@ -1,0 +1,37 @@
+{
+  "name": "@xurunxin/morpheus-protocol-workspace",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Morpheus Agent OS public protocol and App SDK workspace",
+  "type": "module",
+  "packageManager": "bun@1.3.14",
+  "engines": {
+    "bun": ">=1.3.14",
+    "node": ">=20"
+  },
+  "scripts": {
+    "clean": "bun scripts/clean.mjs",
+    "build": "bun run clean && bun x tsc -b --force && bun build packages/morpheus-protocol/src/index.ts --outdir packages/morpheus-protocol/dist --target browser --format esm && bun build packages/morpheus-sdk/src/index.ts --outdir packages/morpheus-sdk/dist --target browser --format esm --external @xurunxin/morpheus-protocol",
+    "typecheck": "bun x tsc -b --force",
+    "test": "bun run build && bun test",
+    "lint": "bun x eslint .",
+    "format": "bun x prettier --write .",
+    "format:check": "bun x prettier --check .",
+    "check:boundaries": "bun scripts/check-boundaries.mjs",
+    "check:release-dependencies": "bun scripts/check-release-dependencies.mjs",
+    "check:candidate": "bun scripts/check-candidate-content.mjs",
+    "pack": "bun scripts/pack-packages.mjs",
+    "publish:reconcile": "bun scripts/reconcile-package-publish.mjs",
+    "test:packed-consumer": "bun scripts/verify-packed-consumer.mjs",
+    "verify": "bun run format:check && bun run lint && bun run typecheck && bun run test && bun run check:boundaries && bun run check:release-dependencies && bun run check:candidate && bun run test:packed-consumer"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/bun": "1.3.14",
+    "eslint": "10.4.1",
+    "eslint-config-prettier": "10.1.8",
+    "prettier": "3.8.3",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.60.1"
+  }
+}
