@@ -275,10 +275,19 @@ describe("Greenfield Agent OS v1 contract", () => {
     expect(
       Object.isFrozen(AGENT_OS_V1_CONTRACT_SCHEMA.$defs.executionGrant.properties.kind.enum)
     ).toBe(true);
-    const definition: AgentOsV1.AgentDefinition = fixture().agentDefinition;
+    const input = fixture();
+    const definition: AgentOsV1.AgentDefinition = input.agentDefinition;
     expect(definition.agentId).toBe("agent.demo");
-    expect(AgentOsV1.parseAgentOsV1Contract).toBe(parseAgentOsV1Contract);
-    expect(parseFromPackage).toBe(parseAgentOsV1Contract);
+    expect(canonicalAgentOsV1Source(AgentOsV1.parseAgentOsV1Contract(input))).toBe(
+      canonicalAgentOsV1Source(parseAgentOsV1Contract(input))
+    );
+    expect(canonicalAgentOsV1Source(parseFromPackage(input))).toBe(
+      canonicalAgentOsV1Source(parseAgentOsV1Contract(input))
+    );
+    expect(() => parseFromPackage({})).toThrow(AgentOsV1ContractError);
+    expect(() => parseFromPackage({ ...input, digest: digest("mismatch") })).toThrow(
+      AgentOsV1ContractError
+    );
     expect(AGENT_OS_V1_SUPPORTED_FEATURES).toContain("delegation-grants");
   });
 

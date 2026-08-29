@@ -1,3 +1,4 @@
+import { deepFreeze } from "./contract-primitives.js";
 import { parseAgentOsWorkerLeaseV1Envelope } from "./agent-os-worker-lease-v1-contract.js";
 import type {
   AgentOsWorkerLeaseV1ConformanceResult,
@@ -304,12 +305,4 @@ function assertScenarioResult(
 
 function isScenarioId(value: unknown): value is AgentOsWorkerLeaseV1ConformanceScenarioId {
   return AGENT_OS_WORKER_LEASE_V1_CONFORMANCE_SCENARIOS.some((scenario) => scenario.id === value);
-}
-
-function deepFreeze<T>(value: T): T {
-  if (value !== null && typeof value === "object" && !Object.isFrozen(value)) {
-    for (const child of Object.values(value)) deepFreeze(child);
-    Object.freeze(value);
-  }
-  return value;
 }

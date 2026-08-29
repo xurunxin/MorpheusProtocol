@@ -1,3 +1,4 @@
+import { deepFreeze } from "./contract-primitives.js";
 import {
   AGENT_OS_V1_PROTOCOL_REGISTRY,
   AgentOsV1ContractError,
@@ -918,14 +919,6 @@ function updateResult<TStatus extends "UPDATE_REQUIRED" | "rejected", TReason ex
   reason: TReason
 ): Readonly<{ status: TStatus; reason: TReason }> {
   return Object.freeze({ status, reason });
-}
-
-function deepFreeze<T>(value: T): T {
-  if (value !== null && typeof value === "object" && !Object.isFrozen(value)) {
-    for (const child of Object.values(value)) deepFreeze(child);
-    Object.freeze(value);
-  }
-  return value;
 }
 
 /** ContractError is re-exported for callers that want one catch boundary for strict codecs. */

@@ -269,16 +269,20 @@ describe("agent-os-worker-lease/v1 strict contract", () => {
     expect(JSON.stringify(AGENT_OS_V1_IMMUTABLE_PROMPT_REFERENCE_ARTIFACT)).toBe(before);
   });
 
-  test("matches an independent SHA-256 implementation and exports one parser identity", () => {
+  test("matches an independent SHA-256 implementation and exports equivalent parser behavior", () => {
     const message = envelope("worker.availability", availability);
     const { envelopeDigest, ...unsigned } = message;
     expect(message.payloadDigest).toBe(
       digest(canonical({ operation: message.operation, payload: message.payload }))
     );
     expect(envelopeDigest).toBe(digest(canonical(unsigned)));
-    expect(parseFromPackage).toBe(parseAgentOsWorkerLeaseV1Envelope);
-    expect(AgentOsWorkerLeaseV1.parseAgentOsWorkerLeaseV1Envelope).toBe(
-      parseAgentOsWorkerLeaseV1Envelope
+    expect(parseFromPackage(message)).toEqual(parseAgentOsWorkerLeaseV1Envelope(message));
+    expect(AgentOsWorkerLeaseV1.parseAgentOsWorkerLeaseV1Envelope(message)).toEqual(
+      parseAgentOsWorkerLeaseV1Envelope(message)
+    );
+    expect(() => parseFromPackage({})).toThrow(AgentOsWorkerLeaseV1ContractError);
+    expect(() => parseFromPackage({ ...message, envelopeDigest: digest("mismatch") })).toThrow(
+      "DIGEST_MISMATCH"
     );
     expect(AgentOsWorkerLeaseV1Reference.runAgentOsWorkerLeaseV1Conformance).toBeFunction();
   });

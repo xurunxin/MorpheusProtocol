@@ -6,6 +6,8 @@
  * A future execution.v1 owner may carry this payload in its own envelope.
  */
 
+import { deepFreeze } from "./contract-primitives.js";
+
 export const AGENT_OS_V1_PROVIDER_PROJECTION_SCHEMA = "agent-os-provider-projection/v1" as const;
 export const AGENT_OS_V1_PROVIDER_PROJECTION_OPERATION = "provider.read" as const;
 export const AGENT_OS_V1_PROVIDER_READ_OPERATION = AGENT_OS_V1_PROVIDER_PROJECTION_OPERATION;
@@ -1092,14 +1094,6 @@ function canonicalJson(value: unknown): string {
 
 function contentDigest(source: string): string {
   return `sha256:${sha256Hex(source)}`;
-}
-
-function deepFreeze<T>(value: T): T {
-  if (value !== null && typeof value === "object" && !Object.isFrozen(value)) {
-    for (const child of Object.values(value)) deepFreeze(child);
-    Object.freeze(value);
-  }
-  return value;
 }
 
 function fail(code: AgentOsV1ProviderProjectionContractErrorCode): never {
