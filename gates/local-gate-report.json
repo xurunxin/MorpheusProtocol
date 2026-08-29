@@ -136,18 +136,6 @@
   ],
   "deferred": [
     {
-      "item": "GitHub repository creation and push",
-      "reason": "owned by the parent cutover task; this repository task was explicitly local-only"
-    },
-    {
-      "item": "GitHub Packages publication and authenticated fresh-registry install",
-      "reason": "requires the public remote repository, a version tag and registry-side package permissions"
-    },
-    {
-      "item": "GitHub-hosted provenance attestation",
-      "reason": "tag-only workflow is configured but cannot execute before the remote and tag exist"
-    },
-    {
       "item": "latest dist-tag promotion",
       "reason": "reserved for MorpheusIntegration acceptance of an exact release lock"
     }
