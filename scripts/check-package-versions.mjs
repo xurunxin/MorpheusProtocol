@@ -1,16 +1,17 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
+import { resolveReleaseContract } from "./release-contract.mjs";
+
 const root = resolve(import.meta.dirname, "..");
 const rootManifest = await manifest("package.json");
 const protocol = await manifest("packages/morpheus-protocol/package.json");
 const sdk = await manifest("packages/morpheus-sdk/package.json");
-const versionPattern =
-  /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-next\.[1-9]\d*)?$/u;
-
-assert(
-  versionPattern.test(rootManifest.version),
-  "版本必须是稳定 semver 或 -next.N",
+const release = resolveReleaseContract(
+  rootManifest.version,
+  process.env.GITHUB_REF_TYPE === "tag"
+    ? process.env.GITHUB_REF_NAME
+    : undefined,
 );
 assert(rootManifest.packageManager === "bun@1.3.14", "根仓必须固定 Bun 1.3.14");
 assert(
@@ -43,14 +44,9 @@ for (const [name, value] of [
   );
 }
 
-if (process.env.GITHUB_REF_TYPE === "tag") {
-  assert(
-    process.env.GITHUB_REF_NAME === `v${rootManifest.version}`,
-    "tag 必须与 package 版本一致",
-  );
-}
-
-console.info(`Protocol 与 SDK 版本检查通过：${rootManifest.version}`);
+console.info(
+  `Protocol 与 SDK 版本检查通过：${rootManifest.version}; channel=${release.channel ?? "local"}`,
+);
 
 async function manifest(path) {
   return JSON.parse(await readFile(resolve(root, path), "utf8"));
