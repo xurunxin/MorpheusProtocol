@@ -887,13 +887,14 @@ const RECEIPT_OPERATIONS = new Set<string>(
 const IDENTIFIER_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u;
 const INSTANT_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u;
 const MAX_SAFE_COUNTER = Number.MAX_SAFE_INTEGER;
-const POSIX_ABSOLUTE_PATH_PATTERN = /^\/(?:[^/]|$)/u;
-const DRIVE_PATH_PATTERN = /^[A-Za-z]:[\\/]/u;
-const UNC_PATH_PATTERN = /^(?:\\\\|\/\/)[^\\/\s]+[\\/][^\\/\s]+/u;
-const RELATIVE_TRAVERSAL_PATTERN = /(?:^|[\\/])\.\.(?:[\\/]|$)/u;
-const FILE_URI_PATTERN = /^file:(?:\/\/|\/)/iu;
+const POSIX_ABSOLUTE_PATH_PATTERN = /(?:^|[\s"'([{=,:;])\/(?!\/)(?:[^/\s]|$)/u;
+const DRIVE_PATH_PATTERN = /(?:^|[^A-Za-z0-9_])[A-Za-z]:[\\/]/u;
+const UNC_PATH_PATTERN =
+  /(?:^|[\s"'([{=,;])(?:\\\\|\/\/)[^\\/\s]+[\\/][^\\/\s]+/u;
+const RELATIVE_TRAVERSAL_PATTERN = /(?:^|[\s"'([{=,:;\\/])\.\.(?:[\\/]|$)/u;
+const FILE_URI_PATTERN = /(?:^|[^A-Za-z0-9_])file:(?:\/\/|\/)/iu;
 const TOKEN_SIGNATURE_PATTERN =
-  /(?:^|\s)(?:Bearer\s+[A-Za-z0-9._~+/=-]{20,}|(?:gh[pousr]|github_pat)_[A-Za-z0-9_]{30,}|xox[baprs]-[A-Za-z0-9-]{20,}|sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{30,}|eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}|npm_[A-Za-z0-9]{30,}|pypi-[A-Za-z0-9_-]{30,}|-----BEGIN [A-Z ]+ PRIVATE KEY-----)(?:$|\s)/u;
+  /(?:^|[^A-Za-z0-9_-])(?:Bearer\s+[A-Za-z0-9._~+/=-]{20,}|(?:gh[pousr]|github_pat)_[A-Za-z0-9_]{30,}|xox[baprs]-[A-Za-z0-9-]{20,}|sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{30,}|eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}|npm_[A-Za-z0-9]{30,}|pypi-[A-Za-z0-9_-]{30,}|-----BEGIN [A-Z ]+ PRIVATE KEY-----)(?![A-Za-z0-9_-])/u;
 const SENSITIVE_KEY_PATTERN =
   /(?:token|secret|credential|password|authorization|endpoint|localpath|path|workspace)/iu;
 

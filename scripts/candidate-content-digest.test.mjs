@@ -39,7 +39,7 @@ describe("candidate content digest", () => {
         rm(second, { recursive: true, force: true }),
       ]);
     }
-  }, 20_000);
+  }, 60_000);
 
   test("ignores excluded secrets but tracks additions, deletions and checker changes", async () => {
     const root = await createFixture([

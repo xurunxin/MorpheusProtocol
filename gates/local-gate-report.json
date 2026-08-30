@@ -2,7 +2,7 @@
   "schemaVersion": "morpheus-local-gate-report/v1",
   "repository": "MorpheusProtocol",
   "status": "PASS",
-  "recordedAt": "2026-08-30T10:03:21.9662328+08:00",
+  "recordedAt": "2026-08-30T10:19:29.5861586+08:00",
   "sourceProvenance": {
     "repository": "xurunxin/MorpheusCore",
     "commit": "ae30f9ce07a0e27e63b67ba4e4db22545d19423e",
@@ -16,9 +16,9 @@
   "candidateContent": {
     "algorithm": "sha256",
     "canonicalization": "morpheus-candidate-content/v1; git tracked+unignored candidate files; UTF-8 POSIX paths byte-sorted; UTF-8 text BOM removed and CRLF/CR normalized to LF; length-prefixed path and content",
-    "digest": "228dcf3aa986058ef731996da6821b60b22edbffbf9957a43853b619a7c0bd77",
+    "digest": "6aa4864f9b1ac503d5e4b3502bebef1ed0c73b708754b03c031c2a5753da58cc",
     "fileCount": 94,
-    "totalBytes": 1283337,
+    "totalBytes": 1284600,
     "exclusions": [
       "gates/local-gate-report.json",
       "gates/release-receipt.json",
@@ -53,7 +53,7 @@
     {
       "command": "bun run test",
       "status": "PASS",
-      "evidence": "288 passed, 0 failed, 2747 assertions across 25 files, including agent-os-control/v1 matrix/parser/service rejection/inventory, offline publish reconciliation, pack validation, release dependency, and candidate digest suites"
+      "evidence": "288 passed, 0 failed, 2789 assertions across 25 files, including agent-os-control/v1 matrix/parser/service rejection/inventory, embedded sensitive-value rejection, offline publish reconciliation, pack validation, release dependency, and candidate digest suites"
     },
     {
       "command": "bun run lint",
@@ -72,7 +72,7 @@
     {
       "command": "bun run check:candidate",
       "status": "PASS",
-      "evidence": "canonical candidate source/config/workflow digest 228dcf3aa986058ef731996da6821b60b22edbffbf9957a43853b619a7c0bd77 matched the GateReport; filteredRepositoryHead is retained only as extraction provenance"
+      "evidence": "canonical candidate source/config/workflow digest 6aa4864f9b1ac503d5e4b3502bebef1ed0c73b708754b03c031c2a5753da58cc matched the GateReport; filteredRepositoryHead is retained only as extraction provenance"
     },
     {
       "command": "bun run test:packed-consumer",
@@ -117,10 +117,10 @@
       "name": "@xurunxin/morpheus-protocol",
       "version": "0.2.1",
       "filename": "xurunxin-morpheus-protocol-0.2.1.tgz",
-      "sha256": "09e7c505ba84fde215558414f10d9a6b41ce704199f8cd9d17aa337c4d1880d8",
-      "integrity": "sha512-5nR/fnU9fmjZB4TelUux+beIMNB4imTalWX4G+0d7YH3pt0Rrxdaw804pj4vAEJ9sEQAO/1bitUb7bLNWIOscw==",
-      "size": 148506,
-      "unpackedSize": 1044077,
+      "sha256": "e73361e6566231292572bc708f21f37a061f4105f8b3e5c1885cb2aab2c62a34",
+      "integrity": "sha512-5grXGw2mfoQfUxcZyx4qHoLCtFaBYLho8Ol45p8kd9WZY+qcMKhhHzZzXXp8gGc87X0Ooc5jjzxubGdTigh6SQ==",
+      "size": 148532,
+      "unpackedSize": 1044188,
       "fileCount": 63
     },
     {

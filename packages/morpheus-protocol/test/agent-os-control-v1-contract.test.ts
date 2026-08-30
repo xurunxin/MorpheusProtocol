@@ -1063,10 +1063,50 @@ describe("agent-os-control/v1 contract", () => {
       );
       expect(error.code).toBe("SENSITIVE_FIELD");
     }
+
+    const embeddedSensitiveValues = [
+      "error at /tmp/morpheus/state.json",
+      "path C:/Users/xurx/private",
+      "share \\\\server\\share\\private",
+      "see file:///private/value",
+      "relative ../private",
+      `token=ghp_${"a".repeat(36)}`,
+      `credential:Bearer ${"A".repeat(32)}`,
+    ];
+    for (const value of embeddedSensitiveValues) {
+      const seams = [
+        () =>
+          parseAgentOsControlV1({
+            ...requests()[21],
+            details: { message: value },
+          }),
+        () =>
+          parseAgentOsControlAuditReceipt({
+            ...receipts()[21],
+            redactedDetails: { message: value },
+          }),
+        () =>
+          parseAgentOsControlServiceRejection({
+            ...serviceRejectionBase(),
+            detail: value,
+          }),
+      ];
+      for (const parse of seams) {
+        const error = expectContractError(parse);
+        expect(error.code).toBe("SENSITIVE_FIELD");
+      }
+    }
+
     expect(
       parseAgentOsControlV1({
         ...requests()[21],
-        details: { status: "workflow completed", label: "sketch" },
+        details: {
+          status: "workflow completed",
+          label: "sketch",
+          protocol: "agent-os/v1",
+          documentation: "https://example.com/public/path",
+          descriptor: "profile:///not-a-file-uri",
+        },
       }),
     ).toMatchObject({ operation: "control.audit.append" });
   });
