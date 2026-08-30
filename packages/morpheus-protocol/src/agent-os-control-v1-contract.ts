@@ -4,6 +4,52 @@ import { deepFreeze, sha256Hex } from "./contract-primitives.js";
 export const AGENT_OS_CONTROL_V1_SCHEMA_VERSION =
   "agent-os-control/v1" as const;
 
+/**
+ * A pre-authority response for parser/service failures. It deliberately uses
+ * the Control version namespace but is not an authority receipt: it has no
+ * revision, fence, replay, or idempotency state to report.
+ */
+export const AGENT_OS_CONTROL_V1_SERVICE_REJECTION_OPERATION =
+  "control.service.rejection" as const;
+export const AGENT_OS_CONTROL_V1_SERVICE_REJECTION_SCHEMA_VERSION =
+  AGENT_OS_CONTROL_V1_SCHEMA_VERSION;
+export const AGENT_OS_CONTROL_V1_SERVICE_REJECTION_ORIGINS = Object.freeze([
+  "parser",
+  "service",
+] as const);
+export type AgentOsControlV1ServiceRejectionOrigin =
+  (typeof AGENT_OS_CONTROL_V1_SERVICE_REJECTION_ORIGINS)[number];
+export type AgentOsControlV1RequestRejectionCode =
+  | "INVALID_SHAPE"
+  | "INVALID_VALUE"
+  | "EXPIRED"
+  | "LIMIT_EXCEEDED";
+export const AGENT_OS_CONTROL_V1_SERVICE_REJECTION_CODES = Object.freeze([
+  "INVALID_SHAPE",
+  "INVALID_VALUE",
+  "UNKNOWN_FIELD",
+  "UNSUPPORTED_VERSION",
+  "UNSUPPORTED_OPERATION",
+  "SENSITIVE_FIELD",
+  "EXPIRED",
+  "LIMIT_EXCEEDED",
+  "SERVICE_UNAVAILABLE",
+  "CORRUPT_STORE",
+] as const);
+export type AgentOsControlV1ServiceRejectionCode =
+  (typeof AGENT_OS_CONTROL_V1_SERVICE_REJECTION_CODES)[number];
+export type AgentOsControlServiceRejection = Readonly<{
+  schemaVersion: typeof AGENT_OS_CONTROL_V1_SCHEMA_VERSION;
+  operation: typeof AGENT_OS_CONTROL_V1_SERVICE_REJECTION_OPERATION;
+  requestId: string;
+  correlationId: string;
+  status: "rejected";
+  code: AgentOsControlV1ServiceRejectionCode;
+  origin: AgentOsControlV1ServiceRejectionOrigin;
+  detail?: string;
+}>;
+export type AgentOsControlV1ServiceRejection = AgentOsControlServiceRejection;
+
 export const AGENT_OS_CONTROL_V1_CAPABILITIES = Object.freeze([
   "admission",
   "enrollment",
@@ -142,6 +188,14 @@ export type AgentOsControlV1RequestOperation =
 export type AgentOsControlV1ReceiptOperation =
   (typeof AGENT_OS_CONTROL_V1_OPERATION_MATRIX)[number]["receipt"];
 
+export type AgentOsControlV1OperationCodeInventoryEntry = Readonly<{
+  capability: AgentOsControlV1Capability;
+  request: AgentOsControlV1RequestOperation;
+  receipt: AgentOsControlV1ReceiptOperation;
+  requestRejects: readonly AgentOsControlV1RequestRejectionCode[];
+  responseCodes: readonly string[];
+}>;
+
 export const AGENT_OS_CONTROL_V1_REQUEST_OPERATIONS = Object.freeze(
   AGENT_OS_CONTROL_V1_OPERATION_MATRIX.map((entry) => entry.request),
 );
@@ -270,6 +324,9 @@ export type AgentOsControlAdmissionAdmitReceipt = ReceiptBase<
   | "NONE"
   | "RBAC_DENIED"
   | "QUOTA_EXCEEDED"
+  | "LIMIT_EXCEEDED"
+  | "POLICY_DENIED"
+  | "EXPIRED"
   | "STALE_REVISION"
   | "STALE_FENCE"
   | "IDEMPOTENCY_CONFLICT"
@@ -324,6 +381,9 @@ export type AgentOsControlEnrollmentEnrollReceipt = ReceiptBase<
   | "NONE"
   | "RBAC_DENIED"
   | "SCOPE_MISMATCH"
+  | "LIMIT_EXCEEDED"
+  | "POLICY_DENIED"
+  | "EXPIRED"
   | "STALE_REVISION"
   | "STALE_FENCE"
   | "IDEMPOTENCY_CONFLICT"
@@ -458,6 +518,7 @@ export type AgentOsControlQueueEnqueueReceipt = QueueReceiptBase<
   | "NONE"
   | "LIMIT_EXCEEDED"
   | "QUOTA_EXCEEDED"
+  | "POLICY_DENIED"
   | "PARTITIONED"
   | "STALE_REVISION"
   | "STALE_FENCE"
@@ -471,6 +532,7 @@ export type AgentOsControlQueueLeaseReceipt = QueueReceiptBase<
   | "PARTITIONED"
   | "POLICY_DENIED"
   | "QUOTA_EXCEEDED"
+  | "LIMIT_EXCEEDED"
   | "EXPIRED"
   | "STALE_REVISION"
   | "STALE_FENCE"
@@ -517,7 +579,14 @@ export type AgentOsControlQueueTakeoverReceipt = QueueReceiptBase<
 >;
 export type AgentOsControlQueueReclaimReceipt = QueueReceiptBase<
   "control.queue.reclaim.receipt",
-  "NONE" | "STALE_REVISION" | "STALE_FENCE" | "IDEMPOTENCY_CONFLICT",
+  | "NONE"
+  | "NOT_FOUND"
+  | "POLICY_DENIED"
+  | "TERMINAL"
+  | "EXPIRED"
+  | "STALE_REVISION"
+  | "STALE_FENCE"
+  | "IDEMPOTENCY_CONFLICT",
   QueueItemLeaseReceiptFields
 >;
 
@@ -572,6 +641,7 @@ export type AgentOsControlWorkflowDeclareReceipt = WorkflowReceiptBase<
   "control.workflow.declare.receipt",
   | "NONE"
   | "LIMIT_EXCEEDED"
+  | "POLICY_DENIED"
   | "EXPIRED"
   | "STALE_REVISION"
   | "STALE_FENCE"
@@ -652,6 +722,7 @@ export type AgentOsControlDeclaredTeamDeclareReceipt = TeamReceiptBase<
   "control.declared-team.declare.receipt",
   | "NONE"
   | "LIMIT_EXCEEDED"
+  | "POLICY_DENIED"
   | "EXPIRED"
   | "STALE_REVISION"
   | "STALE_FENCE"
@@ -709,6 +780,7 @@ export type AgentOsControlHumanControlDecideReceipt = ReceiptBase<
   | "NONE"
   | "RBAC_DENIED"
   | "POLICY_DENIED"
+  | "LIMIT_EXCEEDED"
   | "TERMINAL"
   | "EXPIRED"
   | "STALE_REVISION"
@@ -748,10 +820,10 @@ export type AgentOsControlAuditAppendReceipt = ReceiptBase<
   | "NONE"
   | "LIMIT_EXCEEDED"
   | "INVALID_INPUT"
+  | "TERMINAL"
   | "STALE_REVISION"
   | "STALE_FENCE"
   | "IDEMPOTENCY_CONFLICT"
-  | "CORRUPT_STORE"
 > &
   Readonly<{
     eventId?: string;
@@ -779,6 +851,12 @@ export type AgentOsControlReceipt =
   | AgentOsControlDeclaredTeamReceipt
   | AgentOsControlHumanControlReceipt
   | AgentOsControlAuditReceipt;
+
+export type AgentOsControlMessage =
+  | AgentOsControlRequest
+  | AgentOsControlReceipt
+  | AgentOsControlServiceRejection;
+export type AgentOsControlV1Message = AgentOsControlMessage;
 
 export type AgentOsControlV1ContractErrorCode =
   | "INVALID_SHAPE"
@@ -809,7 +887,13 @@ const RECEIPT_OPERATIONS = new Set<string>(
 const IDENTIFIER_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u;
 const INSTANT_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u;
 const MAX_SAFE_COUNTER = Number.MAX_SAFE_INTEGER;
-const WINDOWS_PATH_PATTERN = /(?:[A-Za-z]:\\|\\\\|\/etc\/|\/home\/|\/Users\/)/u;
+const POSIX_ABSOLUTE_PATH_PATTERN = /^\/(?:[^/]|$)/u;
+const DRIVE_PATH_PATTERN = /^[A-Za-z]:[\\/]/u;
+const UNC_PATH_PATTERN = /^(?:\\\\|\/\/)[^\\/\s]+[\\/][^\\/\s]+/u;
+const RELATIVE_TRAVERSAL_PATTERN = /(?:^|[\\/])\.\.(?:[\\/]|$)/u;
+const FILE_URI_PATTERN = /^file:(?:\/\/|\/)/iu;
+const TOKEN_SIGNATURE_PATTERN =
+  /(?:^|\s)(?:Bearer\s+[A-Za-z0-9._~+/=-]{20,}|(?:gh[pousr]|github_pat)_[A-Za-z0-9_]{30,}|xox[baprs]-[A-Za-z0-9-]{20,}|sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{30,}|eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}|npm_[A-Za-z0-9]{30,}|pypi-[A-Za-z0-9_-]{30,}|-----BEGIN [A-Z ]+ PRIVATE KEY-----)(?:$|\s)/u;
 const SENSITIVE_KEY_PATTERN =
   /(?:token|secret|credential|password|authorization|endpoint|localpath|path|workspace)/iu;
 
@@ -817,6 +901,9 @@ const ADMISSION_ADMIT_CODES = [
   "NONE",
   "RBAC_DENIED",
   "QUOTA_EXCEEDED",
+  "LIMIT_EXCEEDED",
+  "POLICY_DENIED",
+  "EXPIRED",
   "STALE_REVISION",
   "STALE_FENCE",
   "IDEMPOTENCY_CONFLICT",
@@ -834,6 +921,9 @@ const ENROLLMENT_ENROLL_CODES = [
   "NONE",
   "RBAC_DENIED",
   "SCOPE_MISMATCH",
+  "LIMIT_EXCEEDED",
+  "POLICY_DENIED",
+  "EXPIRED",
   "STALE_REVISION",
   "STALE_FENCE",
   "IDEMPOTENCY_CONFLICT",
@@ -861,6 +951,7 @@ const QUEUE_CODES = {
     "NONE",
     "LIMIT_EXCEEDED",
     "QUOTA_EXCEEDED",
+    "POLICY_DENIED",
     "PARTITIONED",
     "STALE_REVISION",
     "STALE_FENCE",
@@ -872,6 +963,7 @@ const QUEUE_CODES = {
     "PARTITIONED",
     "POLICY_DENIED",
     "QUOTA_EXCEEDED",
+    "LIMIT_EXCEEDED",
     "EXPIRED",
     "STALE_REVISION",
     "STALE_FENCE",
@@ -909,12 +1001,22 @@ const QUEUE_CODES = {
     "STALE_FENCE",
     "IDEMPOTENCY_CONFLICT",
   ],
-  reclaim: ["NONE", "STALE_REVISION", "STALE_FENCE", "IDEMPOTENCY_CONFLICT"],
+  reclaim: [
+    "NONE",
+    "NOT_FOUND",
+    "POLICY_DENIED",
+    "TERMINAL",
+    "EXPIRED",
+    "STALE_REVISION",
+    "STALE_FENCE",
+    "IDEMPOTENCY_CONFLICT",
+  ],
 } as const;
 const WORKFLOW_CODES = {
   declare: [
     "NONE",
     "LIMIT_EXCEEDED",
+    "POLICY_DENIED",
     "EXPIRED",
     "STALE_REVISION",
     "STALE_FENCE",
@@ -953,6 +1055,7 @@ const TEAM_CODES = {
   declare: [
     "NONE",
     "LIMIT_EXCEEDED",
+    "POLICY_DENIED",
     "EXPIRED",
     "STALE_REVISION",
     "STALE_FENCE",
@@ -982,6 +1085,7 @@ const HUMAN_DECIDE_CODES = [
   "NONE",
   "RBAC_DENIED",
   "POLICY_DENIED",
+  "LIMIT_EXCEEDED",
   "TERMINAL",
   "EXPIRED",
   "STALE_REVISION",
@@ -1000,11 +1104,146 @@ const AUDIT_CODES = [
   "NONE",
   "LIMIT_EXCEEDED",
   "INVALID_INPUT",
+  "TERMINAL",
   "STALE_REVISION",
   "STALE_FENCE",
   "IDEMPOTENCY_CONFLICT",
-  "CORRUPT_STORE",
 ] as const;
+
+const INVALID_SHAPE_VALUE_CODES = [
+  "INVALID_SHAPE",
+  "INVALID_VALUE",
+] as const satisfies readonly AgentOsControlV1RequestRejectionCode[];
+const INVALID_SHAPE_VALUE_EXPIRED_CODES = [
+  "INVALID_SHAPE",
+  "INVALID_VALUE",
+  "EXPIRED",
+] as const satisfies readonly AgentOsControlV1RequestRejectionCode[];
+const INVALID_SHAPE_VALUE_LIMIT_CODES = [
+  "INVALID_SHAPE",
+  "INVALID_VALUE",
+  "LIMIT_EXCEEDED",
+] as const satisfies readonly AgentOsControlV1RequestRejectionCode[];
+
+type AgentOsControlV1OperationCodeDefinition = Readonly<{
+  requestRejects: readonly AgentOsControlV1RequestRejectionCode[];
+  responseCodes: readonly string[];
+}>;
+
+const OPERATION_CODE_DEFINITIONS = {
+  "control.admission.admit": {
+    requestRejects: INVALID_SHAPE_VALUE_EXPIRED_CODES,
+    responseCodes: ADMISSION_ADMIT_CODES,
+  },
+  "control.admission.release": {
+    requestRejects: INVALID_SHAPE_VALUE_CODES,
+    responseCodes: ADMISSION_RELEASE_CODES,
+  },
+  "control.enrollment.enroll": {
+    requestRejects: INVALID_SHAPE_VALUE_EXPIRED_CODES,
+    responseCodes: ENROLLMENT_ENROLL_CODES,
+  },
+  "control.enrollment.revoke": {
+    requestRejects: INVALID_SHAPE_VALUE_CODES,
+    responseCodes: ENROLLMENT_REVOKE_CODES,
+  },
+  "control.governance-policy.update": {
+    requestRejects: INVALID_SHAPE_VALUE_LIMIT_CODES,
+    responseCodes: GOVERNANCE_CODES,
+  },
+  "control.queue.enqueue": {
+    requestRejects: INVALID_SHAPE_VALUE_EXPIRED_CODES,
+    responseCodes: QUEUE_CODES.enqueue,
+  },
+  "control.queue.lease": {
+    requestRejects: INVALID_SHAPE_VALUE_EXPIRED_CODES,
+    responseCodes: QUEUE_CODES.lease,
+  },
+  "control.queue.complete": {
+    requestRejects: INVALID_SHAPE_VALUE_EXPIRED_CODES,
+    responseCodes: QUEUE_CODES.complete,
+  },
+  "control.queue.cancel": {
+    requestRejects: INVALID_SHAPE_VALUE_CODES,
+    responseCodes: QUEUE_CODES.cancel,
+  },
+  "control.queue.partition": {
+    requestRejects: INVALID_SHAPE_VALUE_CODES,
+    responseCodes: QUEUE_CODES.partition,
+  },
+  "control.queue.takeover": {
+    requestRejects: INVALID_SHAPE_VALUE_CODES,
+    responseCodes: QUEUE_CODES.takeover,
+  },
+  "control.queue.reclaim": {
+    requestRejects: INVALID_SHAPE_VALUE_EXPIRED_CODES,
+    responseCodes: QUEUE_CODES.reclaim,
+  },
+  "control.workflow.declare": {
+    requestRejects: INVALID_SHAPE_VALUE_EXPIRED_CODES,
+    responseCodes: WORKFLOW_CODES.declare,
+  },
+  "control.workflow.start": {
+    requestRejects: INVALID_SHAPE_VALUE_EXPIRED_CODES,
+    responseCodes: WORKFLOW_CODES.start,
+  },
+  "control.workflow.advance": {
+    requestRejects: INVALID_SHAPE_VALUE_EXPIRED_CODES,
+    responseCodes: WORKFLOW_CODES.advance,
+  },
+  "control.workflow.cancel": {
+    requestRejects: INVALID_SHAPE_VALUE_EXPIRED_CODES,
+    responseCodes: WORKFLOW_CODES.cancel,
+  },
+  "control.declared-team.declare": {
+    requestRejects: INVALID_SHAPE_VALUE_LIMIT_CODES,
+    responseCodes: TEAM_CODES.declare,
+  },
+  "control.declared-team.update": {
+    requestRejects: INVALID_SHAPE_VALUE_LIMIT_CODES,
+    responseCodes: TEAM_CODES.update,
+  },
+  "control.declared-team.revoke": {
+    requestRejects: INVALID_SHAPE_VALUE_CODES,
+    responseCodes: TEAM_CODES.revoke,
+  },
+  "control.human-control.decide": {
+    requestRejects: INVALID_SHAPE_VALUE_EXPIRED_CODES,
+    responseCodes: HUMAN_DECIDE_CODES,
+  },
+  "control.human-control.policy.update": {
+    requestRejects: INVALID_SHAPE_VALUE_LIMIT_CODES,
+    responseCodes: HUMAN_POLICY_CODES,
+  },
+  "control.audit.append": {
+    requestRejects: INVALID_SHAPE_VALUE_LIMIT_CODES,
+    responseCodes: AUDIT_CODES,
+  },
+} as const satisfies Record<
+  AgentOsControlV1RequestOperation,
+  AgentOsControlV1OperationCodeDefinition
+>;
+
+/**
+ * Cross-repository conformance inventory. The operation matrix supplies the
+ * stable order and this table supplies the request/service and authority
+ * response codes; consumers must import it instead of copying the contract.
+ * Audit store failures are service rejections, not authority receipts.
+ */
+export const AGENT_OS_CONTROL_V1_OPERATION_CODE_INVENTORY = deepFreeze(
+  AGENT_OS_CONTROL_V1_OPERATION_MATRIX.map((entry) => {
+    const definition = OPERATION_CODE_DEFINITIONS[entry.request];
+    return {
+      ...entry,
+      requestRejects: definition.requestRejects,
+      responseCodes: definition.responseCodes,
+    };
+  }),
+);
+export const AGENT_OS_CONTROL_V1_OPERATION_INVENTORY =
+  AGENT_OS_CONTROL_V1_OPERATION_CODE_INVENTORY;
+export const AGENT_OS_CONTROL_V1_CONFORMANCE_INVENTORY =
+  AGENT_OS_CONTROL_V1_OPERATION_CODE_INVENTORY;
 
 export function parseAgentOsControlAdmissionRequest(
   input: unknown,
@@ -1546,6 +1785,71 @@ export function parseAgentOsControlAuditReceipt(
   return deepFreeze(output) as AgentOsControlAuditReceipt;
 }
 
+/**
+ * Parse a pre-authority rejection. This shape is intentionally separate from
+ * authority receipts because a parser/service failure has no committed
+ * revision or fence to report.
+ */
+export function parseAgentOsControlServiceRejection(
+  input: unknown,
+): Readonly<AgentOsControlServiceRejection> {
+  const value = record(input, "Control service rejection");
+  exact(
+    value,
+    [
+      "schemaVersion",
+      "operation",
+      "requestId",
+      "correlationId",
+      "status",
+      "code",
+      "origin",
+    ],
+    "Control service rejection",
+    ["detail"],
+  );
+  if (value.schemaVersion !== AGENT_OS_CONTROL_V1_SCHEMA_VERSION)
+    fail("UNSUPPORTED_VERSION", "schemaVersion must equal agent-os-control/v1");
+  if (value.operation !== AGENT_OS_CONTROL_V1_SERVICE_REJECTION_OPERATION)
+    fail("UNSUPPORTED_OPERATION", "service rejection operation is invalid");
+  if (value.status !== "rejected")
+    fail("INVALID_VALUE", "service rejection status must be rejected");
+  if (
+    typeof value.code !== "string" ||
+    !AGENT_OS_CONTROL_V1_SERVICE_REJECTION_CODES.some(
+      (candidate) => candidate === value.code,
+    )
+  )
+    fail("INVALID_VALUE", "service rejection code is invalid");
+  if (value.origin !== "parser" && value.origin !== "service")
+    fail("INVALID_VALUE", "service rejection origin is invalid");
+  if (
+    (value.code === "CORRUPT_STORE" || value.code === "SERVICE_UNAVAILABLE") &&
+    value.origin !== "service"
+  )
+    fail(
+      "INVALID_VALUE",
+      "store/service availability rejections must originate from service",
+    );
+  const output: Record<string, unknown> = {
+    schemaVersion: AGENT_OS_CONTROL_V1_SCHEMA_VERSION,
+    operation: AGENT_OS_CONTROL_V1_SERVICE_REJECTION_OPERATION,
+    requestId: identifier(value.requestId, "requestId"),
+    correlationId: identifier(value.correlationId, "correlationId"),
+    status: "rejected",
+    code: value.code,
+    origin: value.origin,
+  };
+  optional(output, value, "detail", (raw) => serviceDetail(raw));
+  return deepFreeze(output) as AgentOsControlServiceRejection;
+}
+
+export function parseAgentOsControlV1ServiceRejection(
+  input: unknown,
+): Readonly<AgentOsControlV1ServiceRejection> {
+  return parseAgentOsControlServiceRejection(input);
+}
+
 export function parseAgentOsControlRequest(
   input: unknown,
 ): Readonly<AgentOsControlRequest> {
@@ -1600,6 +1904,58 @@ export function parseAgentOsControlV1Receipt(
   return parseAgentOsControlReceipt(input);
 }
 
+export function canonicalAgentOsControlServiceRejectionSource(
+  input: unknown,
+): string {
+  return canonicalJson(parseAgentOsControlServiceRejection(input));
+}
+
+export function canonicalAgentOsControlV1ServiceRejectionSource(
+  input: unknown,
+): string {
+  return canonicalAgentOsControlServiceRejectionSource(input);
+}
+
+export function createAgentOsControlServiceRejectionDigest(
+  input: unknown,
+): string {
+  return `sha256:${sha256Hex(canonicalAgentOsControlServiceRejectionSource(input))}`;
+}
+
+export function createAgentOsControlV1ServiceRejectionDigest(
+  input: unknown,
+): string {
+  return createAgentOsControlServiceRejectionDigest(input);
+}
+
+export function encodeAgentOsControlServiceRejection(input: unknown): string {
+  return canonicalAgentOsControlServiceRejectionSource(input);
+}
+
+export function encodeAgentOsControlV1ServiceRejection(input: unknown): string {
+  return encodeAgentOsControlServiceRejection(input);
+}
+
+export function decodeAgentOsControlServiceRejection(
+  source: string,
+): Readonly<AgentOsControlServiceRejection> {
+  if (typeof source !== "string")
+    fail("INVALID_VALUE", "encoded service rejection must be a string");
+  let value: unknown;
+  try {
+    value = JSON.parse(source) as unknown;
+  } catch {
+    fail("INVALID_VALUE", "encoded service rejection is not valid JSON");
+  }
+  return parseAgentOsControlServiceRejection(value);
+}
+
+export function decodeAgentOsControlV1ServiceRejection(
+  source: string,
+): Readonly<AgentOsControlV1ServiceRejection> {
+  return decodeAgentOsControlServiceRejection(source);
+}
+
 export function canonicalAgentOsControlRequestSource(input: unknown): string {
   return canonicalJson(parseAgentOsControlRequest(input));
 }
@@ -1609,7 +1965,10 @@ export function canonicalAgentOsControlReceiptSource(input: unknown): string {
 }
 
 export function canonicalAgentOsControlV1Source(input: unknown): string {
-  const operation = readOperation(input, "Control message");
+  const value = record(input, "Control message");
+  if (value.operation === AGENT_OS_CONTROL_V1_SERVICE_REJECTION_OPERATION)
+    return canonicalAgentOsControlServiceRejectionSource(value);
+  const operation = readOperation(value, "Control message");
   return RECEIPT_OPERATIONS.has(operation)
     ? canonicalAgentOsControlReceiptSource(input)
     : canonicalAgentOsControlRequestSource(input);
@@ -1634,7 +1993,7 @@ export function encodeAgentOsControlV1(input: unknown): string {
 
 export function decodeAgentOsControlV1(
   source: string,
-): Readonly<AgentOsControlRequest | AgentOsControlReceipt> {
+): Readonly<AgentOsControlMessage> {
   if (typeof source !== "string")
     fail("INVALID_VALUE", "encoded source must be a string");
   let value: unknown;
@@ -1648,8 +2007,11 @@ export function decodeAgentOsControlV1(
 
 export function parseAgentOsControlV1(
   input: unknown,
-): Readonly<AgentOsControlRequest | AgentOsControlReceipt> {
-  const operation = readOperation(input, "Control message");
+): Readonly<AgentOsControlMessage> {
+  const value = record(input, "Control message");
+  if (value.operation === AGENT_OS_CONTROL_V1_SERVICE_REJECTION_OPERATION)
+    return parseAgentOsControlServiceRejection(value);
+  const operation = readOperation(value, "Control message");
   return RECEIPT_OPERATIONS.has(operation)
     ? parseAgentOsControlReceipt(input)
     : parseAgentOsControlRequest(input);
@@ -2077,8 +2439,11 @@ function publicValue(
   if (typeof input === "string") {
     if (input.length > AGENT_OS_CONTROL_V1_LIMITS.maxPublicStringLength)
       fail("INVALID_VALUE", `${label} is too long`);
-    if (WINDOWS_PATH_PATTERN.test(input))
-      fail("SENSITIVE_FIELD", `${label} contains a local path`);
+    if (containsSensitivePublicValue(input))
+      fail(
+        "SENSITIVE_FIELD",
+        `${label} contains a path or credential signature`,
+      );
     return input;
   }
   if (typeof input === "number") {
@@ -2122,6 +2487,24 @@ function publicValue(
   }
   ancestors.delete(objectInput);
   return Object.freeze(result);
+}
+
+function serviceDetail(input: unknown): string {
+  const value = publicValue(input, "detail", 1);
+  if (typeof value !== "string")
+    fail("INVALID_VALUE", "service rejection detail must be a string");
+  return value;
+}
+
+function containsSensitivePublicValue(value: string): boolean {
+  return (
+    POSIX_ABSOLUTE_PATH_PATTERN.test(value) ||
+    DRIVE_PATH_PATTERN.test(value) ||
+    UNC_PATH_PATTERN.test(value) ||
+    RELATIVE_TRAVERSAL_PATTERN.test(value) ||
+    FILE_URI_PATTERN.test(value) ||
+    TOKEN_SIGNATURE_PATTERN.test(value)
+  );
 }
 
 function identifierList(

@@ -1,13 +1,20 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  AGENT_OS_CONTROL_V1_OPERATION_CODE_INVENTORY,
   AGENT_OS_CONTROL_V1_OPERATION_MATRIX,
   AGENT_OS_CONTROL_V1_SCHEMA_VERSION,
+  AGENT_OS_CONTROL_V1_SERVICE_REJECTION_CODES,
+  AGENT_OS_CONTROL_V1_SERVICE_REJECTION_OPERATION,
   AgentOsControlV1ContractError,
   AgentOsControlV1,
+  canonicalAgentOsControlServiceRejectionSource,
   canonicalAgentOsControlV1Source,
+  decodeAgentOsControlServiceRejection,
   decodeAgentOsControlV1,
+  encodeAgentOsControlServiceRejection,
   encodeAgentOsControlV1,
+  parseAgentOsControlServiceRejection,
   parseAgentOsControlV1,
   parseAgentOsControlAdmissionRequest,
   parseAgentOsControlAuditReceipt,
@@ -414,6 +421,9 @@ const RECEIPT_CODES: readonly (readonly string[])[] = [
     "NONE",
     "RBAC_DENIED",
     "QUOTA_EXCEEDED",
+    "LIMIT_EXCEEDED",
+    "POLICY_DENIED",
+    "EXPIRED",
     "STALE_REVISION",
     "STALE_FENCE",
     "IDEMPOTENCY_CONFLICT",
@@ -431,6 +441,9 @@ const RECEIPT_CODES: readonly (readonly string[])[] = [
     "NONE",
     "RBAC_DENIED",
     "SCOPE_MISMATCH",
+    "LIMIT_EXCEEDED",
+    "POLICY_DENIED",
+    "EXPIRED",
     "STALE_REVISION",
     "STALE_FENCE",
     "IDEMPOTENCY_CONFLICT",
@@ -457,6 +470,7 @@ const RECEIPT_CODES: readonly (readonly string[])[] = [
     "NONE",
     "LIMIT_EXCEEDED",
     "QUOTA_EXCEEDED",
+    "POLICY_DENIED",
     "PARTITIONED",
     "STALE_REVISION",
     "STALE_FENCE",
@@ -468,6 +482,7 @@ const RECEIPT_CODES: readonly (readonly string[])[] = [
     "PARTITIONED",
     "POLICY_DENIED",
     "QUOTA_EXCEEDED",
+    "LIMIT_EXCEEDED",
     "EXPIRED",
     "STALE_REVISION",
     "STALE_FENCE",
@@ -505,10 +520,20 @@ const RECEIPT_CODES: readonly (readonly string[])[] = [
     "STALE_FENCE",
     "IDEMPOTENCY_CONFLICT",
   ],
-  ["NONE", "STALE_REVISION", "STALE_FENCE", "IDEMPOTENCY_CONFLICT"],
+  [
+    "NONE",
+    "NOT_FOUND",
+    "POLICY_DENIED",
+    "TERMINAL",
+    "EXPIRED",
+    "STALE_REVISION",
+    "STALE_FENCE",
+    "IDEMPOTENCY_CONFLICT",
+  ],
   [
     "NONE",
     "LIMIT_EXCEEDED",
+    "POLICY_DENIED",
     "EXPIRED",
     "STALE_REVISION",
     "STALE_FENCE",
@@ -545,6 +570,7 @@ const RECEIPT_CODES: readonly (readonly string[])[] = [
   [
     "NONE",
     "LIMIT_EXCEEDED",
+    "POLICY_DENIED",
     "EXPIRED",
     "STALE_REVISION",
     "STALE_FENCE",
@@ -573,6 +599,7 @@ const RECEIPT_CODES: readonly (readonly string[])[] = [
     "NONE",
     "RBAC_DENIED",
     "POLICY_DENIED",
+    "LIMIT_EXCEEDED",
     "TERMINAL",
     "EXPIRED",
     "STALE_REVISION",
@@ -591,12 +618,53 @@ const RECEIPT_CODES: readonly (readonly string[])[] = [
     "NONE",
     "LIMIT_EXCEEDED",
     "INVALID_INPUT",
+    "TERMINAL",
     "STALE_REVISION",
     "STALE_FENCE",
     "IDEMPOTENCY_CONFLICT",
-    "CORRUPT_STORE",
   ],
 ];
+
+const REQUEST_REJECTS: readonly (readonly string[])[] = [
+  ["INVALID_SHAPE", "INVALID_VALUE", "EXPIRED"],
+  ["INVALID_SHAPE", "INVALID_VALUE"],
+  ["INVALID_SHAPE", "INVALID_VALUE", "EXPIRED"],
+  ["INVALID_SHAPE", "INVALID_VALUE"],
+  ["INVALID_SHAPE", "INVALID_VALUE", "LIMIT_EXCEEDED"],
+  ["INVALID_SHAPE", "INVALID_VALUE", "EXPIRED"],
+  ["INVALID_SHAPE", "INVALID_VALUE", "EXPIRED"],
+  ["INVALID_SHAPE", "INVALID_VALUE", "EXPIRED"],
+  ["INVALID_SHAPE", "INVALID_VALUE"],
+  ["INVALID_SHAPE", "INVALID_VALUE"],
+  ["INVALID_SHAPE", "INVALID_VALUE"],
+  ["INVALID_SHAPE", "INVALID_VALUE", "EXPIRED"],
+  ["INVALID_SHAPE", "INVALID_VALUE", "EXPIRED"],
+  ["INVALID_SHAPE", "INVALID_VALUE", "EXPIRED"],
+  ["INVALID_SHAPE", "INVALID_VALUE", "EXPIRED"],
+  ["INVALID_SHAPE", "INVALID_VALUE", "EXPIRED"],
+  ["INVALID_SHAPE", "INVALID_VALUE", "LIMIT_EXCEEDED"],
+  ["INVALID_SHAPE", "INVALID_VALUE", "LIMIT_EXCEEDED"],
+  ["INVALID_SHAPE", "INVALID_VALUE"],
+  ["INVALID_SHAPE", "INVALID_VALUE", "EXPIRED"],
+  ["INVALID_SHAPE", "INVALID_VALUE", "LIMIT_EXCEEDED"],
+  ["INVALID_SHAPE", "INVALID_VALUE", "LIMIT_EXCEEDED"],
+];
+
+function serviceRejectionBase(
+  code: string = "INVALID_SHAPE",
+  origin: string = "parser",
+): Record<string, unknown> {
+  return {
+    schemaVersion: AGENT_OS_CONTROL_V1_SCHEMA_VERSION,
+    operation: AGENT_OS_CONTROL_V1_SERVICE_REJECTION_OPERATION,
+    requestId: "request.1",
+    correlationId: "correlation.1",
+    status: "rejected",
+    code,
+    origin,
+    detail: "request could not be admitted",
+  };
+}
 
 function expectContractError(
   action: () => unknown,
@@ -633,6 +701,33 @@ describe("agent-os-control/v1 contract", () => {
     expect(AgentOsControlV1.AGENT_OS_CONTROL_V1_OPERATION_MATRIX).toBe(
       AGENT_OS_CONTROL_V1_OPERATION_MATRIX,
     );
+  });
+
+  test("exports a machine-readable operation and code inventory", () => {
+    expect(AGENT_OS_CONTROL_V1_OPERATION_CODE_INVENTORY).toHaveLength(22);
+    expect(
+      AGENT_OS_CONTROL_V1_OPERATION_CODE_INVENTORY.map((entry) => [
+        entry.capability,
+        entry.request,
+        entry.receipt,
+        entry.requestRejects,
+        entry.responseCodes,
+      ]),
+    ).toEqual(
+      AGENT_OS_CONTROL_V1_OPERATION_MATRIX.map((entry, index) => [
+        entry.capability,
+        entry.request,
+        entry.receipt,
+        REQUEST_REJECTS[index],
+        RECEIPT_CODES[index],
+      ]),
+    );
+    expect(AGENT_OS_CONTROL_V1_OPERATION_CODE_INVENTORY).not.toBe(
+      AGENT_OS_CONTROL_V1_OPERATION_MATRIX,
+    );
+    for (const entry of AGENT_OS_CONTROL_V1_OPERATION_CODE_INVENTORY) {
+      expectDeepFrozen(entry);
+    }
   });
 
   test("accepts every response code in the authoritative operation matrix", () => {
@@ -714,6 +809,104 @@ describe("agent-os-control/v1 contract", () => {
     expect(encodeAgentOsControlV1(input)).toBe(canonical);
     expect(decodeAgentOsControlV1(canonical)).toEqual(
       parseAgentOsControlV1(input),
+    );
+  });
+
+  test("parses pre-authority service rejections without authority state", () => {
+    for (const code of AGENT_OS_CONTROL_V1_SERVICE_REJECTION_CODES) {
+      const origin =
+        code === "CORRUPT_STORE" || code === "SERVICE_UNAVAILABLE"
+          ? "service"
+          : "parser";
+      const input = serviceRejectionBase(code, origin);
+      const parsed = parseAgentOsControlServiceRejection(input);
+      expect(parsed).toEqual(input);
+      expect("revision" in parsed).toBe(false);
+      expect("fence" in parsed).toBe(false);
+      expectDeepFrozen(parsed);
+      expect(parseAgentOsControlV1(input)).toEqual(parsed);
+      const canonical = canonicalAgentOsControlServiceRejectionSource(input);
+      expect(encodeAgentOsControlServiceRejection(input)).toBe(canonical);
+      expect(decodeAgentOsControlServiceRejection(canonical)).toEqual(parsed);
+    }
+  });
+
+  test("rejects malformed service rejections and authority-state forgery", () => {
+    const malformed = [
+      {
+        name: "authority revision",
+        mutate: (value: Record<string, unknown>) => ({
+          ...value,
+          revision: 1,
+        }),
+        code: "UNKNOWN_FIELD",
+      },
+      {
+        name: "authority fence",
+        mutate: (value: Record<string, unknown>) => ({ ...value, fence: 1 }),
+        code: "UNKNOWN_FIELD",
+      },
+      {
+        name: "wrong version",
+        mutate: (value: Record<string, unknown>) => ({
+          ...value,
+          schemaVersion: "agent-os/v1",
+        }),
+        code: "UNSUPPORTED_VERSION",
+      },
+      {
+        name: "wrong operation",
+        mutate: (value: Record<string, unknown>) => ({
+          ...value,
+          operation: "control.audit.append.receipt",
+        }),
+        code: "UNSUPPORTED_OPERATION",
+      },
+      {
+        name: "accepted status",
+        mutate: (value: Record<string, unknown>) => ({
+          ...value,
+          status: "accepted",
+        }),
+        code: "INVALID_VALUE",
+      },
+      {
+        name: "service-only code from parser",
+        mutate: (value: Record<string, unknown>) => ({
+          ...value,
+          code: "CORRUPT_STORE",
+        }),
+        code: "INVALID_VALUE",
+      },
+      {
+        name: "sensitive detail",
+        mutate: (value: Record<string, unknown>) => ({
+          ...value,
+          detail: "file:///private/token",
+        }),
+        code: "SENSITIVE_FIELD",
+      },
+      {
+        name: "sensitive field",
+        mutate: (value: Record<string, unknown>) => ({
+          ...value,
+          credential: "redacted",
+        }),
+        code: "UNKNOWN_FIELD",
+      },
+    ] as const;
+    for (const item of malformed) {
+      const error = expectContractError(() =>
+        parseAgentOsControlServiceRejection(
+          item.mutate(serviceRejectionBase()),
+        ),
+      );
+      expect(error.code).toBe(item.code);
+    }
+    const missingRequestId = serviceRejectionBase();
+    delete missingRequestId.requestId;
+    expectContractError(() =>
+      parseAgentOsControlServiceRejection(missingRequestId),
     );
   });
 
@@ -831,6 +1024,72 @@ describe("agent-os-control/v1 contract", () => {
         ],
       }),
     );
+  });
+
+  test("rejects audit paths and high-confidence token signatures by value", () => {
+    const pathValues = [
+      "/var/lib/morpheus",
+      "C:/Users/xurx/private",
+      "C:\\Users\\xurx\\private",
+      "\\\\server\\share\\private",
+      "//server/share/private",
+      "../private",
+      "..\\private",
+      "nested/../private",
+      "file:///private/value",
+    ];
+    for (const value of pathValues) {
+      const error = expectContractError(() =>
+        parseAgentOsControlV1({
+          ...requests()[21],
+          details: { value },
+        }),
+      );
+      expect(error.code).toBe("SENSITIVE_FIELD");
+    }
+
+    const tokenValues = [
+      `ghp_${"a".repeat(36)}`,
+      `Bearer ${"A".repeat(32)}`,
+      `sk-${"A".repeat(24)}`,
+      `eyJ${"a".repeat(16)}.${"b".repeat(16)}.${"c".repeat(16)}`,
+    ];
+    for (const value of tokenValues) {
+      const error = expectContractError(() =>
+        parseAgentOsControlV1({
+          ...requests()[21],
+          details: { value },
+        }),
+      );
+      expect(error.code).toBe("SENSITIVE_FIELD");
+    }
+    expect(
+      parseAgentOsControlV1({
+        ...requests()[21],
+        details: { status: "workflow completed", label: "sketch" },
+      }),
+    ).toMatchObject({ operation: "control.audit.append" });
+  });
+
+  test("does not encode audit CORRUPT_STORE as an authority receipt", () => {
+    const error = expectContractError(() =>
+      parseAgentOsControlAuditReceipt({
+        ...receipts()[21],
+        status: "rejected",
+        code: "CORRUPT_STORE",
+      }),
+    );
+    expect(error.code).toBe("INVALID_VALUE");
+    const service = parseAgentOsControlServiceRejection(
+      serviceRejectionBase("CORRUPT_STORE", "service"),
+    );
+    expect(service).toMatchObject({
+      status: "rejected",
+      code: "CORRUPT_STORE",
+      origin: "service",
+    });
+    expect("revision" in service).toBe(false);
+    expect("fence" in service).toBe(false);
   });
 
   test("requires receipt status and code to agree", () => {

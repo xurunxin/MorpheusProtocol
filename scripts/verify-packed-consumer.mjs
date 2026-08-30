@@ -66,10 +66,12 @@ try {
   );
   await writeFile(
     resolve(consumer, "consumer.mjs"),
-    `import { AGENT_OS_CONTROL_V1_OPERATION_MATRIX, AGENT_OS_V1_PROTOCOL_REGISTRY, parseAgentOsControlV1, validateProviderExtensionManifest } from "@xurunxin/morpheus-protocol";\n` +
+    `import { AGENT_OS_CONTROL_V1_OPERATION_CODE_INVENTORY, AGENT_OS_CONTROL_V1_OPERATION_MATRIX, AGENT_OS_V1_PROTOCOL_REGISTRY, parseAgentOsControlServiceRejection, parseAgentOsControlV1, validateProviderExtensionManifest } from "@xurunxin/morpheus-protocol";\n` +
       `import { createAgentOsAppClient } from "@xurunxin/morpheus-sdk";\n` +
       `if (!AGENT_OS_V1_PROTOCOL_REGISTRY) throw new Error("missing protocol registry");\n` +
       `if (AGENT_OS_CONTROL_V1_OPERATION_MATRIX.length !== 22) throw new Error("missing Control operation matrix");\n` +
+      `if (AGENT_OS_CONTROL_V1_OPERATION_CODE_INVENTORY.length !== 22) throw new Error("missing Control code inventory");\n` +
+      `if (typeof parseAgentOsControlServiceRejection !== "function") throw new Error("missing Control service rejection parser");\n` +
       `if (typeof parseAgentOsControlV1 !== "function") throw new Error("missing Control parser");\n` +
       `if (typeof validateProviderExtensionManifest !== "function") throw new Error("missing extension manifest contract");\n` +
       `if (typeof createAgentOsAppClient !== "function") throw new Error("missing App SDK");\n`,
