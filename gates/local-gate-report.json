@@ -2,7 +2,7 @@
   "schemaVersion": "morpheus-local-gate-report/v1",
   "repository": "MorpheusProtocol",
   "status": "PASS",
-  "recordedAt": "2026-08-30T01:00:19.6838481+08:00",
+  "recordedAt": "2026-08-30T09:28:14.6140922+08:00",
   "sourceProvenance": {
     "repository": "xurunxin/MorpheusCore",
     "commit": "ae30f9ce07a0e27e63b67ba4e4db22545d19423e",
@@ -16,9 +16,9 @@
   "candidateContent": {
     "algorithm": "sha256",
     "canonicalization": "morpheus-candidate-content/v1; git tracked+unignored candidate files; UTF-8 POSIX paths byte-sorted; UTF-8 text BOM removed and CRLF/CR normalized to LF; length-prefixed path and content",
-    "digest": "ef6e0e98fbc981393ce0fc9d3e8db2b851cb4be7c304fc9df57618e51cab4481",
-    "fileCount": 92,
-    "totalBytes": 1162861,
+    "digest": "2524d2103d4226ffedd66d4d7af13d10ba4d53ea291ade86d20486b5f04ac1cf",
+    "fileCount": 94,
+    "totalBytes": 1259655,
     "exclusions": [
       "gates/local-gate-report.json",
       "gates/release-receipt.json",
@@ -32,9 +32,9 @@
     ]
   },
   "releaseCandidate": {
-    "protocol": "@xurunxin/morpheus-protocol@0.2.0",
-    "sdk": "@xurunxin/morpheus-sdk@0.2.0",
-    "sdkProtocolDependency": "0.2.0",
+    "protocol": "@xurunxin/morpheus-protocol@0.2.1",
+    "sdk": "@xurunxin/morpheus-sdk@0.2.1",
+    "sdkProtocolDependency": "0.2.1",
     "license": "Apache-2.0",
     "registry": "https://npm.pkg.github.com",
     "distTag": "next"
@@ -53,7 +53,7 @@
     {
       "command": "bun run test",
       "status": "PASS",
-      "evidence": "270 passed, 0 failed, 1387 assertions across 24 files, including offline publish reconciliation, pack validation, release dependency, and candidate digest suites"
+      "evidence": "283 passed, 0 failed, 2176 assertions across 25 files, including agent-os-control/v1 matrix/parser, offline publish reconciliation, pack validation, release dependency, and candidate digest suites"
     },
     {
       "command": "bun run lint",
@@ -72,7 +72,7 @@
     {
       "command": "bun run check:candidate",
       "status": "PASS",
-      "evidence": "canonical candidate source/config/workflow digest matched the GateReport; filteredRepositoryHead is retained only as extraction provenance"
+      "evidence": "canonical candidate source/config/workflow digest 2524d2103d4226ffedd66d4d7af13d10ba4d53ea291ade86d20486b5f04ac1cf matched the GateReport; filteredRepositoryHead is retained only as extraction provenance"
     },
     {
       "command": "bun run test:packed-consumer",
@@ -82,7 +82,7 @@
     {
       "command": "bun run verify",
       "status": "PASS",
-      "evidence": "format, lint, typecheck, build, 270 tests, boundary, release dependency, canonical candidate, and packed-consumer gates"
+      "evidence": "format, lint, typecheck, build, 283 tests, boundary, release dependency, canonical candidate, and packed-consumer gates"
     },
     {
       "command": "bun run pack (two consecutive runs)",
@@ -115,22 +115,22 @@
   "artifacts": [
     {
       "name": "@xurunxin/morpheus-protocol",
-      "version": "0.2.0",
-      "filename": "xurunxin-morpheus-protocol-0.2.0.tgz",
-      "sha256": "4aea0a452c0433b74c97b84910ee70c0cf97fa502f35a955c1c6f4667ba47b69",
-      "integrity": "sha512-MA+lg679F7B3VJbszPi39lfStvJhz/2TmsYXfXs6aAoz4Akuiyvs/yZDyxt98qk1bXvNfhpvQbl+K2xnD1SKDw==",
-      "size": 128733,
-      "unpackedSize": 768357,
-      "fileCount": 61
+      "version": "0.2.1",
+      "filename": "xurunxin-morpheus-protocol-0.2.1.tgz",
+      "sha256": "60d6b3e297cecf2419898068cfd7e37c491577cdf75040ec460184c10826123a",
+      "integrity": "sha512-ODG5KStLMMk9qk9Mvk9LRwRcYfvspgExNVjSx5TlOiYQoZGCRlohuyogPtxLVdaDX/hB/Zm3j7WfxWizWDuucw==",
+      "size": 142174,
+      "unpackedSize": 866317,
+      "fileCount": 63
     },
     {
       "name": "@xurunxin/morpheus-sdk",
-      "version": "0.2.0",
-      "filename": "xurunxin-morpheus-sdk-0.2.0.tgz",
-      "sha256": "cbc98df773a79cfd90993cb5519c071d6e2b07af829454ee0ee6fb3aae11edc3",
-      "integrity": "sha512-5z9w40yumQLe4fRzx0MbNTkJYrGWreB5S9P7mhUvxE+Clvq1iow3JYh9rromSuQsR812L5biWpjty1ahEj6fzQ==",
-      "size": 8998,
-      "unpackedSize": 28778,
+      "version": "0.2.1",
+      "filename": "xurunxin-morpheus-sdk-0.2.1.tgz",
+      "sha256": "4382a3893b64d29970c48c1c4b74c67ecdc20e3bde6b1c81712329cd5fa05141",
+      "integrity": "sha512-EmvYrdsRBgVON8q1/5ym/KutNnf2JvOVueXEtowP+dUKcTAs3fc8J8/rzQufVpvdnmy9jLJ379fQvqdg0G2s2A==",
+      "size": 9080,
+      "unpackedSize": 28967,
       "fileCount": 15
     }
   ],

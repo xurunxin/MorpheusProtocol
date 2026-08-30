@@ -28,6 +28,9 @@ export * from "./agent-os-worker-lease-v1-contract.js";
 export * from "./agent-os-worker-lease-v1-reference.js";
 export type * from "./agent-os-worker-lease-v1-types.js";
 
+export * as AgentOsControlV1 from "./agent-os-control-v1-contract.js";
+export * from "./agent-os-control-v1-contract.js";
+
 export * from "./tool-policy-types.js";
 export * from "./tool-policy-types.contract.js";
 export * from "./extension-manifest.js";

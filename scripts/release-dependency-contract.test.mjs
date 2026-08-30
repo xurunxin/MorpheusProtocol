@@ -10,7 +10,7 @@ import {
 describe("release dependency contract", () => {
   test("accepts registry versions and ignores repository metadata", () => {
     const manifest = {
-      dependencies: { "@xurunxin/morpheus-protocol": "0.2.0" },
+      dependencies: { "@xurunxin/morpheus-protocol": "0.2.1" },
       devDependencies: { typescript: "6.0.3" },
       repository: {
         type: "git",

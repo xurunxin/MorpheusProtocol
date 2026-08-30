@@ -5,12 +5,12 @@ import { reconcilePackagePublications } from "./reconcile-package-publish.mjs";
 const candidates = [
   {
     name: "@xurunxin/morpheus-protocol",
-    version: "0.2.0",
+    version: "0.2.1",
     integrity: "sha512-protocol",
   },
   {
     name: "@xurunxin/morpheus-sdk",
-    version: "0.2.0",
+    version: "0.2.1",
     integrity: "sha512-sdk",
   },
 ];
@@ -36,14 +36,14 @@ describe("package publication reconciliation", () => {
       event.startsWith("publish:"),
     );
     expect(firstTag).toBeGreaterThan(lastPublish);
-    expect(client.tags.get("@xurunxin/morpheus-protocol:next")).toBe("0.2.0");
-    expect(client.tags.get("@xurunxin/morpheus-sdk:next")).toBe("0.2.0");
+    expect(client.tags.get("@xurunxin/morpheus-protocol:next")).toBe("0.2.1");
+    expect(client.tags.get("@xurunxin/morpheus-sdk:next")).toBe("0.2.1");
   });
 
   test("skips a matching version and publishes only the missing peer", async () => {
     const client = createRegistryClient({
       versions: new Map([
-        ["@xurunxin/morpheus-protocol@0.2.0", "sha512-protocol"],
+        ["@xurunxin/morpheus-protocol@0.2.1", "sha512-protocol"],
       ]),
     });
 
@@ -59,7 +59,7 @@ describe("package publication reconciliation", () => {
     ]);
     expect(
       client.events.filter((event) => event.startsWith("publish:")),
-    ).toEqual(["publish:@xurunxin/morpheus-sdk@0.2.0:candidate-staging"]);
+    ).toEqual(["publish:@xurunxin/morpheus-sdk@0.2.1:candidate-staging"]);
   });
 
   test("reconciles tags without publishing when both versions match", async () => {
@@ -103,7 +103,7 @@ describe("package publication reconciliation", () => {
 
   test("fails every write when a preflight integrity conflicts", async () => {
     const client = createRegistryClient({
-      versions: new Map([["@xurunxin/morpheus-sdk@0.2.0", "sha512-different"]]),
+      versions: new Map([["@xurunxin/morpheus-sdk@0.2.1", "sha512-different"]]),
     });
 
     await expect(

@@ -1,6 +1,6 @@
 {
   "name": "@xurunxin/morpheus-sdk",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Client-only Agent OS application SDK",
   "type": "module",
   "license": "Apache-2.0",
@@ -45,6 +45,6 @@
     "prepack": "bun run build"
   },
   "dependencies": {
-    "@xurunxin/morpheus-protocol": "0.2.0"
+    "@xurunxin/morpheus-protocol": "0.2.1"
   }
 }
