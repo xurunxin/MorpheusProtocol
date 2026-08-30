@@ -1,0 +1,33 @@
+{
+  "schemaVersion": "morpheus-release-receipt/v1",
+  "repository": "MorpheusProtocol",
+  "recordedAt": "2026-08-30T10:35:19.3379860+08:00",
+  "candidate": {
+    "commit": "0bd5ad8e5b8a82434a80aa15ad5d71d7a9ae01aa",
+    "tree": "e672441aa65ea16d6c03ed62eb6a32f1b93faa28",
+    "contentDigest": {
+      "algorithm": "sha256",
+      "digest": "6aa4864f9b1ac503d5e4b3502bebef1ed0c73b708754b03c031c2a5753da58cc"
+    }
+  },
+  "packages": [
+    {
+      "name": "@xurunxin/morpheus-protocol",
+      "version": "0.2.1",
+      "tarballSha256": "e73361e6566231292572bc708f21f37a061f4105f8b3e5c1885cb2aab2c62a34",
+      "integrity": "sha512-5grXGw2mfoQfUxcZyx4qHoLCtFaBYLho8Ol45p8kd9WZY+qcMKhhHzZzXXp8gGc87X0Ooc5jjzxubGdTigh6SQ=="
+    },
+    {
+      "name": "@xurunxin/morpheus-sdk",
+      "version": "0.2.1",
+      "tarballSha256": "4382a3893b64d29970c48c1c4b74c67ecdc20e3bde6b1c81712329cd5fa05141",
+      "integrity": "sha512-EmvYrdsRBgVON8q1/5ym/KutNnf2JvOVueXEtowP+dUKcTAs3fc8J8/rzQufVpvdnmy9jLJ379fQvqdg0G2s2A=="
+    }
+  ],
+  "publication": {
+    "registry": "https://npm.pkg.github.com",
+    "candidateTag": "next",
+    "stableTag": "latest",
+    "status": "published-next-attested"
+  }
+}
