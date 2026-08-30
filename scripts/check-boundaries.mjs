@@ -16,7 +16,7 @@ assert(
   protocolPackage.name === "@xurunxin/morpheus-protocol",
   "unexpected Protocol identity",
 );
-assert(protocolPackage.version === "0.2.1", "unexpected Protocol version");
+assert(protocolPackage.version === "0.3.0", "unexpected Protocol version");
 assert(
   protocolPackage.private !== true,
   "Protocol package must be publishable",
@@ -33,8 +33,8 @@ assert(
 assert(sdkPackage.private !== true, "SDK package must be publishable");
 assert(
   JSON.stringify(sdkPackage.dependencies) ===
-    JSON.stringify({ "@xurunxin/morpheus-protocol": "0.2.1" }),
-  "SDK must depend only on exact @xurunxin/morpheus-protocol@0.2.1",
+    JSON.stringify({ "@xurunxin/morpheus-protocol": "0.3.0" }),
+  "SDK must depend only on exact @xurunxin/morpheus-protocol@0.3.0",
 );
 
 for (const file of await typescriptFiles(resolve(protocolRoot, "src"))) {
@@ -57,12 +57,12 @@ for (const file of await typescriptFiles(resolve(sdkRoot, "src"))) {
   }
 }
 
-const legacyScope = ["@", "morpheus", "/"].join("");
+const forbiddenScope = ["@", "morpheus", "/"].join("");
 for (const file of await repositoryTextFiles(root)) {
   const source = await readFile(file, "utf8");
   assert(
-    !source.includes(legacyScope),
-    `legacy package identity remains in ${file}`,
+    !source.includes(forbiddenScope),
+    `forbidden package identity remains in ${file}`,
   );
 }
 

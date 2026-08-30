@@ -10,7 +10,6 @@ import type {
   ToolResultEnvelope,
   ToolExecRoutePolicy,
   ToolcallRequest,
-  ToolcallResult,
   ToolcallRoute,
 } from "./tool-policy-types.js";
 
@@ -163,17 +162,6 @@ const _request = {
   },
 } satisfies ToolcallRequest;
 
-const _result = {
-  success: true,
-  callId: "tc-1",
-  visibleTool: "bash",
-  route: "wasm.exec",
-  target: "grep",
-  command: "grep",
-  output: "foo README.md",
-  audit: { toolCallId: "tc-1" },
-} satisfies ToolcallResult<string>;
-
 const _invocationEnvelope = {
   toolId: "bash",
   callId: "tc-1",
@@ -200,3 +188,28 @@ const _resultEnvelope = {
   durationMs: 12,
   auditIds: ["audit-1"],
 } satisfies ToolResultEnvelope<string>;
+
+const _deniedResultEnvelope = {
+  callId: "tc-2",
+  status: "denied",
+  artifacts: [],
+  error: {
+    kind: "policy_denied",
+    originalCode: "APPROVAL_REQUIRED",
+    message: "需要批准",
+  },
+  auditIds: ["audit-2"],
+} satisfies ToolResultEnvelope;
+
+const _failedResultEnvelope = {
+  callId: "tc-3",
+  status: "failed",
+  artifacts: [{ artifactId: "artifact-3" }],
+  error: {
+    kind: "tool_failed",
+    originalCode: "TOOL_EXEC_FAILED",
+    message: "工具执行失败",
+  },
+  durationMs: 18,
+  auditIds: ["audit-3"],
+} satisfies ToolResultEnvelope;

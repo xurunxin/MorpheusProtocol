@@ -664,7 +664,7 @@ export class AgentOsV1ContractError extends Error {
   }
 }
 
-/** 解析、交叉校验、规范化并深度冻结唯一的 Greenfield v1 合约。 */
+/** 解析、交叉校验、规范化并深度冻结 v1 合约。 */
 export function parseAgentOsV1Contract(
   input: unknown,
 ): CanonicalAgentOsV1Contract {
@@ -2726,7 +2726,7 @@ export function parseAgentOsV1PersonalStateProbe(
   });
 }
 
-/** 探测只分类并给出脱离 serving path 的动作；绝不把旧/未知/损坏状态解析为 v1。 */
+/** 探测只分类并给出脱离 serving path 的动作；绝不把未知或损坏状态解析为 v1。 */
 export function classifyAgentOsV1PersonalState(
   input: unknown,
 ): AgentOsV1PersonalStateClassification {
@@ -2739,13 +2739,6 @@ export function classifyAgentOsV1PersonalState(
       classification: "unknown",
       state: null,
       allowedActions: ["quarantine", "explicit-reset"],
-    });
-  }
-  if (value.schemaVersion === "personal-host/v0") {
-    return deepFreeze({
-      classification: "recognized-legacy",
-      state: null,
-      allowedActions: ["read-only-export", "quarantine", "explicit-reset"],
     });
   }
   if (value.schemaVersion !== "personal-host/v1") {

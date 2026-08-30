@@ -1,8 +1,4 @@
-/**
- * Greenfield Agent OS v1 的纯协议数据模型。
- *
- * 这些类型不描述现有运行时，也不包含兼容或迁移语义。
- */
+/** Agent OS v1 的纯协议数据模型。 */
 
 export type HostKind = "worker" | "personal";
 export type ManagementMode = "standalone" | "enrolled";
@@ -53,11 +49,7 @@ export type PersonalHostState =
   | "ManagedOnline"
   | "ManagedOffline"
   | "Revoked";
-export type PersonalStateClassification =
-  | "clean"
-  | "recognized-legacy"
-  | "unknown"
-  | "corrupt";
+export type PersonalStateClassification = "clean" | "unknown" | "corrupt";
 export type OpaqueRef = `${string}:${string}`;
 export type LeaseEpochRef = `lease-epoch:${string}`;
 export type RotationGenerationRef = `rotation:${string}`;
@@ -678,7 +670,6 @@ export interface AgentOsV1PersonalStateClassification {
   readonly state: Readonly<AgentOsV1PersonalStateProbe> | null;
   readonly allowedActions: readonly (
     | "serve"
-    | "read-only-export"
     | "quarantine"
     | "explicit-reset"
   )[];

@@ -1,17 +1,45 @@
 # @xurunxin/morpheus-protocol
 
-Morpheus Agent OS 的公开 DTO、schema、strict parser、codec、version negotiation 与 extension manifest contract。
+Morpheus 的版本化 DTO、Schema、严格解析器与编解码包。
 
-```ts
-import { parseAgentOsV1Contract } from "@xurunxin/morpheus-protocol";
+## 能力
 
-const contract = parseAgentOsV1Contract(input);
+- 解析并规范化 `agent-os/v1`、Control、Worker Lease、Effect 与应用投影协议。
+- 拒绝未知字段、不支持的版本和不一致绑定。
+- 生成稳定的规范 JSON 与摘要。
+- 校验扩展清单和工具策略数据。
+- 以 `ToolResultEnvelope` 表示完成、拒绝和失败结果。
+
+## 不负责范围
+
+本包不访问数据库、文件系统或凭据，不执行模型、工具与沙箱，也不拥有 Run 生命周期、调度策略或 Host 组合。
+
+## 安装
+
+```powershell
+bun add @xurunxin/morpheus-protocol@0.3.0
 ```
 
-`agent-os-control/v1` 通过 `parseAgentOsControl*Request`、`parseAgentOsControl*Receipt` 和总 `parseAgentOsControlV1` 导出。八个 Control family 的 22 个 operation 均按矩阵严格区分字段；`canonicalAgentOsControlV1Source` 与 `encodeAgentOsControlV1` 产生稳定 canonical JSON。跨仓 conformance 使用导出的 `AGENT_OS_CONTROL_V1_OPERATION_CODE_INVENTORY`（别名 `AGENT_OS_CONTROL_V1_OPERATION_INVENTORY` / `AGENT_OS_CONTROL_V1_CONFORMANCE_INVENTORY`），不要在 Control 复制 operation/code 表。
+## 使用示例
 
-非 authority 状态失败使用 `control.service.rejection`：调用 `parseAgentOsControlServiceRejection`、`encodeAgentOsControlServiceRejection` 或 `decodeAgentOsControlServiceRejection`。它不包含 `revision`、`fence`、`replay`、`idempotencyKey` 等 authority state；`CORRUPT_STORE` 与 `SERVICE_UNAVAILABLE` 只能由 `origin: "service"` 携带。audit authority receipt 不接受 `CORRUPT_STORE`，Control 应改发 service rejection。
+```ts
+import {
+  decodeToolResultEnvelope,
+  parseAgentOsV1Contract,
+} from "@xurunxin/morpheus-protocol";
 
-Audit public values 必须由 producer 先完成 redaction。parser 作为 defense-in-depth 拒绝敏感字段名、POSIX/drive/UNC/relative-traversal/file URI 路径和高置信 token signature（JWT、Bearer、GitHub/OpenAI/AWS 等）；普通文本仍可通过。
+const contract = parseAgentOsV1Contract(input);
+const result = decodeToolResultEnvelope(resultJson);
+```
 
-解析器拒绝未知字段、不支持的版本和非规范数据；canonical digest helper 对等价输入产生稳定结果。本包不包含 storage、credential、runtime 或 authority implementation。
+## 依赖边界
+
+本包没有生产依赖。所有输入在进入业务实现前都应经过对应严格解析器。
+
+## 当前限制
+
+`agent-os/v1` 是当前唯一 Agent OS 主协议版本。Personal Host 状态只识别 `personal-host/v1`。
+
+## 许可证
+
+Apache-2.0，详见包内 `LICENSE`。

@@ -479,6 +479,120 @@ export interface ToolResultEnvelope<T = unknown> {
   auditIds: string[];
 }
 
+/** 严格解析工具结果信封；拒绝未知字段和互相矛盾的状态。 */
+export function parseToolResultEnvelope<T = unknown>(
+  input: unknown,
+): ToolResultEnvelope<T> {
+  const value = requireRecord(input, "tool result envelope");
+  assertExactKeys(
+    value,
+    [
+      "callId",
+      "status",
+      "output",
+      "artifacts",
+      "error",
+      "durationMs",
+      "auditIds",
+    ],
+    "tool result envelope",
+  );
+
+  const callId = requireNonEmptyString(value.callId, "callId");
+  const status = value.status;
+  if (status !== "completed" && status !== "denied" && status !== "failed") {
+    throw new Error("[tool-result] status is invalid");
+  }
+  if (!Array.isArray(value.artifacts)) {
+    throw new Error("[tool-result] artifacts must be an array");
+  }
+  const artifacts = value.artifacts.map((artifact, index) => {
+    const record = requireRecord(artifact, `artifacts[${index}]`);
+    assertExactKeys(record, ["artifactId"], `artifacts[${index}]`);
+    return {
+      artifactId: requireNonEmptyString(
+        record.artifactId,
+        `artifacts[${index}].artifactId`,
+      ),
+    };
+  });
+  if (!Array.isArray(value.auditIds)) {
+    throw new Error("[tool-result] auditIds must be an array");
+  }
+  const auditIds = value.auditIds.map((auditId, index) =>
+    requireNonEmptyString(auditId, `auditIds[${index}]`),
+  );
+  const durationMs = value.durationMs;
+  if (
+    durationMs !== undefined &&
+    (typeof durationMs !== "number" ||
+      !Number.isFinite(durationMs) ||
+      durationMs < 0)
+  ) {
+    throw new Error(
+      "[tool-result] durationMs must be a finite non-negative number",
+    );
+  }
+
+  if (status === "completed") {
+    if (value.error !== undefined) {
+      throw new Error("[tool-result] completed result cannot contain error");
+    }
+    return {
+      callId,
+      status,
+      ...(Object.hasOwn(value, "output") ? { output: value.output as T } : {}),
+      artifacts,
+      ...(durationMs !== undefined ? { durationMs } : {}),
+      auditIds,
+    };
+  }
+
+  if (Object.hasOwn(value, "output")) {
+    throw new Error(
+      "[tool-result] denied or failed result cannot contain output",
+    );
+  }
+  const error = parseToolResultEnvelopeError(value.error);
+  if (status === "denied" && error.kind !== "policy_denied") {
+    throw new Error("[tool-result] denied result requires policy_denied error");
+  }
+  if (status === "failed" && error.kind === "policy_denied") {
+    throw new Error(
+      "[tool-result] failed result cannot use policy_denied error",
+    );
+  }
+  if (status === "denied" && artifacts.length > 0) {
+    throw new Error("[tool-result] denied result cannot contain artifacts");
+  }
+  return {
+    callId,
+    status,
+    artifacts,
+    error,
+    ...(durationMs !== undefined ? { durationMs } : {}),
+    auditIds,
+  };
+}
+
+export function encodeToolResultEnvelope<T = unknown>(
+  input: ToolResultEnvelope<T>,
+): string {
+  return JSON.stringify(parseToolResultEnvelope<T>(input));
+}
+
+export function decodeToolResultEnvelope<T = unknown>(
+  source: string,
+): ToolResultEnvelope<T> {
+  let input: unknown;
+  try {
+    input = JSON.parse(source);
+  } catch {
+    throw new Error("[tool-result] source must be valid JSON");
+  }
+  return parseToolResultEnvelope<T>(input);
+}
+
 export interface CapabilityPolicyAudit {
   tags: string[];
   riskLevel?: ToolRiskLevel;
@@ -530,18 +644,6 @@ export interface ToolcallRequest {
   approval?: ToolApprovalMarker;
   requestedEnvVars?: string[];
   requestedMaxOutputBytes?: number;
-}
-
-export interface ToolcallResult<T = unknown> {
-  success: boolean;
-  callId?: string;
-  visibleTool: string;
-  route: ToolcallRoute;
-  target?: string;
-  command: string;
-  output?: T;
-  error?: { code: ToolPolicyDecisionCode | string; message: string };
-  audit?: unknown;
 }
 
 export interface CreateToolPolicyRequest {
@@ -795,101 +897,6 @@ export function toToolcallRequestFromInvocation(
   };
 }
 
-export function toToolResultEnvelope<T = unknown>(
-  request: ToolcallRequest,
-  result: ToolcallResult<T>,
-): ToolResultEnvelope<T> {
-  const callId = resolveToolCallId(request, result);
-  const auditRecord = asRecord(result.audit);
-  const durationMs = getOptionalNumber(auditRecord, "durationMs");
-  const auditIds = getStringArray(auditRecord, "auditIds");
-  const artifacts = getStringArray(auditRecord, "artifactIds").map(
-    (artifactId) => ({
-      artifactId,
-    }),
-  );
-
-  if (result.success) {
-    return {
-      callId,
-      status: "completed",
-      output: result.output,
-      artifacts,
-      durationMs,
-      auditIds,
-    };
-  }
-
-  const code = result.error?.code;
-  const message = result.error?.message ?? "Tool execution failed";
-  const kind =
-    code === undefined
-      ? "tool_failed"
-      : mapToolPolicyDecisionCodeToInvocationErrorKind(code);
-
-  return {
-    callId,
-    status: kind === "policy_denied" ? "denied" : "failed",
-    output: undefined,
-    artifacts: kind === "policy_denied" ? [] : artifacts,
-    error: {
-      kind,
-      ...(code !== undefined ? { originalCode: code } : {}),
-      message,
-    },
-    durationMs,
-    auditIds,
-  };
-}
-
-export function toLegacyToolcallResult<T = unknown>(
-  invocation: ToolInvocationEnvelope,
-  result: ToolResultEnvelope<T>,
-): ToolcallResult<T> {
-  return {
-    success: result.status === "completed",
-    callId: result.callId,
-    visibleTool: invocation.metadata.visibleTool,
-    route: invocation.metadata.route,
-    ...(invocation.metadata.target !== undefined
-      ? { target: invocation.metadata.target }
-      : {}),
-    command: invocation.metadata.command,
-    ...(result.output !== undefined ? { output: result.output } : {}),
-    ...(result.error !== undefined
-      ? {
-          error: {
-            code: result.error.originalCode ?? result.error.kind,
-            message: result.error.message,
-          },
-        }
-      : {}),
-    audit: {
-      auditIds: result.auditIds,
-      durationMs: result.durationMs,
-      artifactIds: result.artifacts.map((artifact) => artifact.artifactId),
-    },
-  };
-}
-
-function resolveToolCallId(
-  request: ToolcallRequest,
-  result: ToolcallResult,
-): string {
-  if (request.audit.toolCallId.length > 0) {
-    return request.audit.toolCallId;
-  }
-  if (result.callId !== undefined && result.callId.length > 0) {
-    return result.callId;
-  }
-  const auditRecord = asRecord(result.audit);
-  const auditToolCallId = getOptionalString(auditRecord, "toolCallId");
-  if (auditToolCallId !== undefined) {
-    return auditToolCallId;
-  }
-  throw new Error("[tool-invocation] Missing stable callId");
-}
-
 function normalizeInvocationCode(code: string): string {
   return code
     .trim()
@@ -897,7 +904,7 @@ function normalizeInvocationCode(code: string): string {
     .toUpperCase();
 }
 
-function requireNonEmptyString(value: string, field: string): string {
+function requireNonEmptyString(value: unknown, field: string): string {
   if (typeof value !== "string" || value.length === 0) {
     throw new Error(`[tool-invocation] ${field} must be a non-empty string`);
   }
@@ -937,47 +944,50 @@ function isToolPolicyDecisionCode(
   );
 }
 
-function asRecord(value: unknown): Record<string, unknown> | undefined {
-  if (typeof value !== "object" || value === null) {
-    return undefined;
+function requireRecord(value: unknown, label: string): Record<string, unknown> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new Error(`[tool-result] ${label} must be an object`);
   }
   return value as Record<string, unknown>;
 }
 
-function getOptionalString(
-  record: Record<string, unknown> | undefined,
-  key: string,
-): string | undefined {
-  if (record === undefined) {
-    return undefined;
+function assertExactKeys(
+  value: Record<string, unknown>,
+  allowedKeys: readonly string[],
+  label: string,
+): void {
+  const allowed = new Set(allowedKeys);
+  const unknown = Object.keys(value).find((key) => !allowed.has(key));
+  if (unknown !== undefined) {
+    throw new Error(`[tool-result] ${label} contains unknown field ${unknown}`);
   }
-  const value = record[key];
-  return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
-function getOptionalNumber(
-  record: Record<string, unknown> | undefined,
-  key: string,
-): number | undefined {
-  if (record === undefined) {
-    return undefined;
+function parseToolResultEnvelopeError(input: unknown): ToolResultEnvelopeError {
+  const value = requireRecord(input, "error");
+  assertExactKeys(value, ["kind", "message", "originalCode"], "error");
+  const kind = value.kind;
+  if (
+    kind !== "policy_denied" &&
+    kind !== "timeout" &&
+    kind !== "quota_exceeded" &&
+    kind !== "rate_limited" &&
+    kind !== "tool_failed" &&
+    kind !== "cancelled"
+  ) {
+    throw new Error("[tool-result] error.kind is invalid");
   }
-  const value = record[key];
-  return typeof value === "number" ? value : undefined;
-}
-
-function getStringArray(
-  record: Record<string, unknown> | undefined,
-  key: string,
-): string[] {
-  if (record === undefined) {
-    return [];
-  }
-  const value = record[key];
-  if (!Array.isArray(value)) {
-    return [];
-  }
-  return value.filter(
-    (entry): entry is string => typeof entry === "string" && entry.length > 0,
-  );
+  const originalCode = value.originalCode;
+  return {
+    kind,
+    message: requireNonEmptyString(value.message, "error.message"),
+    ...(originalCode !== undefined
+      ? {
+          originalCode: requireNonEmptyString(
+            originalCode,
+            "error.originalCode",
+          ),
+        }
+      : {}),
+  };
 }

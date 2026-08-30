@@ -1,35 +1,64 @@
 # MorpheusProtocol
 
-Morpheus Agent OS 的公开、版本化协议与 App SDK 仓库。源码和 npm 发布物采用 Apache-2.0。
+MorpheusProtocol 提供 Morpheus 的版本化协议、严格 Schema 解析与应用 SDK。仓库公开发布两个锁步版本的 npm 包，根目录只用于开发与发布编排，不作为 npm 包发布。
 
-本仓只包含两类能力：
+## 能力
 
-- `@xurunxin/morpheus-protocol`：DTO、schema、strict parser、codec、version negotiation 与 extension manifest contract。
-- `@xurunxin/morpheus-sdk`：面向 Console、Terminal、Desktop、Operator 的轻量 App client；网络 transport 由调用方注入。
+- `@xurunxin/morpheus-protocol`：DTO、严格解析器、规范编解码、版本协商、应用投影协议和扩展清单。
+- `@xurunxin/morpheus-sdk`：面向 Terminal、Desktop、Operator 与 Console 的轻量客户端编排。
+- `agent-os/v1`：Morpheus 的第一版运行协议标识。
 
-本仓不包含 storage、credential、Kernel lifecycle、Control policy、Runtime adapter 或 Host composition。源码包名已切换为 `@xurunxin/*`，但 `agent-os/v1` 等 wire/schema/artifact 标识保持不变。
+## 不负责范围
 
-## 安装
+本仓不实现持久化、凭据管理、单次 Run 生命周期、控制面策略、模型与工具执行，也不组合 Worker 或 Personal Host。SDK 不提供默认网络传输，调用方必须显式注入客户端或传输实现。
 
-GitHub npm registry 即使读取公开包也要求认证。本地凭据应放在用户级 npm/Bun credential 配置或环境变量中，不得提交到仓库：
+## 安装与使用
 
-```sh
-bun add @xurunxin/morpheus-protocol@0.2.1 @xurunxin/morpheus-sdk@0.2.1
+GitHub Packages 安装需要有效的 `NODE_AUTH_TOKEN`。仓库的 `.npmrc` 只保存 registry 映射和环境变量占位符。
+
+```powershell
+$env:NODE_AUTH_TOKEN = '<GitHub PAT>'
+bun add @xurunxin/morpheus-protocol@0.3.0 @xurunxin/morpheus-sdk@0.3.0
 ```
 
-## 本地 Gate
+```ts
+import { parseAgentOsV1Contract } from "@xurunxin/morpheus-protocol";
+import { createAgentOsAppClient } from "@xurunxin/morpheus-sdk";
 
-```sh
+const contract = parseAgentOsV1Contract(input);
+const app = createAgentOsAppClient(promptClient);
+```
+
+## 开发命令
+
+```powershell
 bun install --frozen-lockfile
-bun run verify
+bun run check
+bun test
+bun run build
 ```
 
-`verify` 覆盖格式、lint、类型、协议测试、边界与依赖 locator 检查、候选内容摘要、打包内容及空目录消费者安装。根构建通过 TypeScript paths/project references 协作，不使用 Bun workspace linking；SDK 的发布 manifest 仍精确依赖 Protocol `0.2.1`。
+`bun run verify` 是日常最高门槛；`bun run verify:full` 额外验证 npm 打包内容与空目录消费者；`bun run release:check` 在打 tag 前执行完整验证、打包和版本一致性检查。
 
-`@xurunxin/morpheus-protocol@0.2.1` 新增 `agent-os-control/v1` 的 8 个 family、22 个 operation-discriminated request/receipt DTO，包含 strict parser、canonical source、digest 与 browser-compatible codec。`AGENT_OS_CONTROL_V1_OPERATION_CODE_INVENTORY` 是跨仓 conformance 的机器可读 operation/requestReject/response code 清单，Control 应直接消费它而不是复制矩阵。Control authority 只交换这些 versioned DTO；storage、credential、runtime 与 authority implementation 仍不属于本包。
+## 目录结构
 
-解析失败、Control service 尚未启动或 authority/store 尚不能形成 committed state 时，使用 `parseAgentOsControlServiceRejection` 对应的 `control.service.rejection` contract。该 pre-authority rejection 只有 request/correlation、`status: "rejected"`、有限 code、origin 和可选安全 detail，明确不携带或伪造 `revision`、`fence`、`replay` 或 idempotency state。`CORRUPT_STORE` 只能作为 `origin: "service"` 的 service rejection，不能作为 audit authority receipt；audit receipt 的 wire code 不包含它。
+```text
+packages/morpheus-protocol/  协议、Schema、解析器与编解码
+packages/morpheus-sdk/       应用客户端 SDK
+scripts/                     边界、依赖、版本与打包检查
+```
 
-Audit `details`/`redactedDetails` 是 producer-side redaction 之后的 public value。parser 只提供 defense-in-depth：拒绝字段名敏感字段、POSIX/Windows/UNC/相对 traversal/file URI 路径，以及 JWT、Bearer、GitHub/OpenAI/AWS 等高置信 token signature；producer 仍必须在进入 Protocol 前完成完整脱敏。普通公共文本不会因包含 `sketch` 等相似前缀而被拒绝。
+## 依赖边界
 
-发布工作流只响应版本 tag。它先对两包做 registry integrity 预检，缺失版本使用临时 `candidate-staging` tag 发布并回读；只有两包均与本地 pack manifest 一致后才幂等推进 `next`。同版本不同 integrity 或 `next` 回退都会中止。稳定 dist-tag 仍由 MorpheusIntegration 对精确 release lock 验收后推进。
+Protocol 没有生产依赖。SDK 只能精确依赖同版本 Protocol。生产依赖和提交的锁文件不得包含 `workspace:*`、`link:`、`file:` 或 Git locator。
+
+## 当前限制
+
+- 两个包必须锁步发布。
+- GitHub Packages 客户端需要令牌。
+- Tool Result 只使用 `ToolResultEnvelope`；拒绝未知字段和矛盾状态。
+- Personal Host 持久化状态只识别 `personal-host/v1`；其他版本按 `unknown` 处理。
+
+## 许可证
+
+源码与两个 npm 包采用 Apache-2.0，详见 [LICENSE](LICENSE)。

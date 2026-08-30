@@ -10,7 +10,7 @@ import {
 describe("release dependency contract", () => {
   test("accepts registry versions and ignores repository metadata", () => {
     const manifest = {
-      dependencies: { "@xurunxin/morpheus-protocol": "0.2.1" },
+      dependencies: { "@xurunxin/morpheus-protocol": "0.3.0" },
       devDependencies: { typescript: "6.0.3" },
       repository: {
         type: "git",
@@ -29,7 +29,7 @@ describe("release dependency contract", () => {
   });
 
   test.each([
-    ["workspace:0.2.0", "local/workspace"],
+    ["workspace:0.3.0", "local/workspace"],
     ["file:../protocol", "local/workspace"],
     ["link:../protocol", "local/workspace"],
     ["portal:../protocol", "local/workspace"],

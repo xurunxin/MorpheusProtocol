@@ -1,15 +1,16 @@
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
-import * as path from "node:path";
-import type { ToolPolicy } from "@xurunxin/morpheus-protocol";
-
-const source = readFileSync(
-  path.join(import.meta.dir, "..", "src", "tool-policy-types.ts"),
-  "utf8",
-);
+import type {
+  ToolPolicy,
+  ToolResultEnvelope,
+} from "@xurunxin/morpheus-protocol";
+import {
+  decodeToolResultEnvelope,
+  encodeToolResultEnvelope,
+  parseToolResultEnvelope,
+} from "@xurunxin/morpheus-protocol";
 
 describe("tool policy sandbox-cli authority", () => {
-  test("serializes sandbox-cli policy without migration modes", () => {
+  test("serializes the current sandbox-cli policy", () => {
     const policy = {
       tools: {
         execute_wasm: {
@@ -41,15 +42,48 @@ describe("tool policy sandbox-cli authority", () => {
     });
   });
 
-  test("does not expose dual-run, rollback, or migration policy fields", () => {
-    const sandboxCliPolicyBlock = source.match(
-      /export interface SandboxCliTargetPolicy \{[\s\S]*?\n\}/,
-    )?.[0];
+  test("represents completed, denied and failed results with envelopes", () => {
+    const results = [
+      {
+        callId: "call.completed",
+        status: "completed",
+        output: "done",
+        artifacts: [],
+        auditIds: ["audit.completed"],
+      },
+      {
+        callId: "call.denied",
+        status: "denied",
+        artifacts: [],
+        error: { kind: "policy_denied", message: "需要批准" },
+        auditIds: ["audit.denied"],
+      },
+      {
+        callId: "call.failed",
+        status: "failed",
+        artifacts: [{ artifactId: "artifact.failed" }],
+        error: { kind: "tool_failed", message: "执行失败" },
+        durationMs: 7,
+        auditIds: ["audit.failed"],
+      },
+    ] satisfies readonly ToolResultEnvelope<string>[];
 
-    expect(sandboxCliPolicyBlock).toBeDefined();
-    expect(sandboxCliPolicyBlock).not.toContain("mode");
-    expect(sandboxCliPolicyBlock).not.toContain("acceptedDifferences");
-    expect(sandboxCliPolicyBlock).not.toContain("rollbackReason");
-    expect(sandboxCliPolicyBlock).not.toContain("migration");
+    expect(results.map((result) => result.status)).toEqual([
+      "completed",
+      "denied",
+      "failed",
+    ]);
+    expect(
+      decodeToolResultEnvelope(encodeToolResultEnvelope(results[0])),
+    ).toEqual(results[0]);
+    expect(() =>
+      parseToolResultEnvelope({ ...results[0], unexpected: true }),
+    ).toThrow("unknown field unexpected");
+    expect(() =>
+      parseToolResultEnvelope({
+        ...results[1],
+        output: "must not be accepted",
+      }),
+    ).toThrow("cannot contain output");
   });
 });

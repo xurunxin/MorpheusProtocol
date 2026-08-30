@@ -247,7 +247,7 @@ function canonicalJsonForTest(value: unknown): string {
   throw new Error("test fixture contains an unsupported value");
 }
 
-describe("Greenfield Agent OS v1 contract", () => {
+describe("Agent OS v1 contract", () => {
   test("exposes one strict machine schema and parser namespace", () => {
     expect(AGENT_OS_V1_CONTRACT_SCHEMA.$schema).toBe(
       "https://json-schema.org/draft/2020-12/schema",
@@ -566,13 +566,13 @@ describe("Greenfield Agent OS v1 contract", () => {
     expect(digest).toBe(expected);
   });
 
-  test("rejects unknown fields, runtime mode and old aliases", () => {
+  test("rejects unknown fields, runtime mode and unsupported aliases", () => {
     const unknown = copy(fixture());
     unknown.unknown = true;
     expectReject(unknown);
     const runtimeMode = copy(fixture());
     (runtimeMode.agentDefinition as Record<string, unknown>).runtime = {
-      mode: "legacy",
+      mode: "unsupported",
     };
     expectReject(runtimeMode);
     const alias = copy(fixture());
@@ -1080,7 +1080,7 @@ describe("Agent OS v1 strict reference DTO codecs", () => {
     expect(handshake.protocol.protocolId).toBe("execution.v1");
   });
 
-  test("classifies clean, recognized legacy, unknown and corrupt state without fallback", () => {
+  test("classifies clean, unknown and corrupt state without fallback", () => {
     expect(
       classifyAgentOsV1PersonalState({
         schemaVersion: "personal-host/v1",
@@ -1101,9 +1101,9 @@ describe("Agent OS v1 strict reference DTO codecs", () => {
     expect(
       classifyAgentOsV1PersonalState({ schemaVersion: "personal-host/v0" }),
     ).toEqual({
-      classification: "recognized-legacy",
+      classification: "unknown",
       state: null,
-      allowedActions: ["read-only-export", "quarantine", "explicit-reset"],
+      allowedActions: ["quarantine", "explicit-reset"],
     });
     expect(
       classifyAgentOsV1PersonalState({ schemaVersion: "foreign/v9" })
