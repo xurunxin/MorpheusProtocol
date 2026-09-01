@@ -21,3 +21,20 @@ export type {
   PromptProjectionState,
   PromptProjectionTransition,
 } from "./projection.js";
+export {
+  createAgentOsInteractiveAppClient,
+  createInteractiveAppClient,
+  reduceAgentOsInteractiveTranscript,
+  reduceInteractiveTranscript,
+  transitionInteractiveProjection,
+} from "./interactive.js";
+export type {
+  InteractiveAppClient,
+  InteractiveAppRequestOptions,
+  InteractiveAppTransport,
+  InteractiveProjectionExpectedContext,
+  InteractiveProjectionRebuildReason,
+  InteractiveProjectionState,
+  InteractiveProjectionTransition,
+  InteractiveTranscriptStreamItem,
+} from "./interactive.js";

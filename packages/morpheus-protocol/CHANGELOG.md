@@ -1,5 +1,11 @@
 # 更新日志
 
+## 0.4.0
+
+- 新增 `agent-os-interactive.v1` 的严格 request、response、event、cursor 与 snapshot 编解码器。
+- 新增 rich transcript event 类型、事件级 cursor、连续序列/回放校验和内容摘要校验。
+- 保持既有 `agent-os/v1` 与 projected SSE v2 API 兼容。
+
 ## 0.3.0
 
 - Tool Result 统一使用 `ToolResultEnvelope`。

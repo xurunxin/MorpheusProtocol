@@ -18,7 +18,7 @@ GitHub Packages 安装需要有效的 `NODE_AUTH_TOKEN`。仓库的 `.npmrc` 只
 
 ```powershell
 $env:NODE_AUTH_TOKEN = '<GitHub PAT>'
-bun add @xurunxin/morpheus-protocol@0.3.0 @xurunxin/morpheus-sdk@0.3.0
+bun add @xurunxin/morpheus-protocol@0.4.0 @xurunxin/morpheus-sdk@0.4.0
 ```
 
 ```ts
