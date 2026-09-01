@@ -1,5 +1,11 @@
 # 更新日志
 
+## 0.5.0
+
+- 新增 `agent-os-interactive.v2` catalog、context binding、workspace change DTO 及严格编解码器。
+- 新增 built-in Admin Control typed operations，并并入统一 Control v1 operation/code inventory。
+- 保持 interactive v1 与既有 Agent OS/Control 协议兼容。
+
 ## 0.4.0
 
 - 新增 `agent-os-interactive.v1` 的严格 request、response、event、cursor 与 snapshot 编解码器。

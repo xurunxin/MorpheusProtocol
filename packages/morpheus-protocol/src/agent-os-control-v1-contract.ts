@@ -1,4 +1,15 @@
 import { deepFreeze, sha256Hex } from "./contract-primitives.js";
+import {
+  AGENT_OS_CONTROL_V1_ADMIN_OPERATION_CODE_DEFINITIONS,
+  AGENT_OS_CONTROL_V1_ADMIN_OPERATION_MATRIX,
+  AGENT_OS_CONTROL_V1_ADMIN_RECEIPT_OPERATIONS,
+  AGENT_OS_CONTROL_V1_ADMIN_REQUEST_OPERATIONS,
+  parseAgentOsControlV1AdminMessage,
+  parseAgentOsControlV1AdminReceipt,
+  parseAgentOsControlV1AdminRequest,
+  type AgentOsControlV1AdminReceipt,
+  type AgentOsControlV1AdminRequest,
+} from "./agent-os-control-v1-admin-contract.js";
 
 /** The versioned wire namespace owned by Morpheus Control. */
 export const AGENT_OS_CONTROL_V1_SCHEMA_VERSION =
@@ -59,6 +70,10 @@ export const AGENT_OS_CONTROL_V1_CAPABILITIES = Object.freeze([
   "declared-team",
   "human-control",
   "redacted-audit",
+  "work-item",
+  "task-plan",
+  "message",
+  "schedule",
 ] as const);
 
 export type AgentOsControlV1Capability =
@@ -181,6 +196,7 @@ export const AGENT_OS_CONTROL_V1_OPERATION_MATRIX = deepFreeze([
     request: "control.audit.append",
     receipt: "control.audit.append.receipt",
   },
+  ...AGENT_OS_CONTROL_V1_ADMIN_OPERATION_MATRIX,
 ] as const);
 
 export type AgentOsControlV1RequestOperation =
@@ -840,7 +856,8 @@ export type AgentOsControlRequest =
   | AgentOsControlWorkflowRequest
   | AgentOsControlDeclaredTeamRequest
   | AgentOsControlHumanControlRequest
-  | AgentOsControlAuditRequest;
+  | AgentOsControlAuditRequest
+  | AgentOsControlV1AdminRequest;
 
 export type AgentOsControlReceipt =
   | AgentOsControlAdmissionReceipt
@@ -850,7 +867,8 @@ export type AgentOsControlReceipt =
   | AgentOsControlWorkflowReceipt
   | AgentOsControlDeclaredTeamReceipt
   | AgentOsControlHumanControlReceipt
-  | AgentOsControlAuditReceipt;
+  | AgentOsControlAuditReceipt
+  | AgentOsControlV1AdminReceipt;
 
 export type AgentOsControlMessage =
   | AgentOsControlRequest
@@ -1220,6 +1238,7 @@ const OPERATION_CODE_DEFINITIONS = {
     requestRejects: INVALID_SHAPE_VALUE_LIMIT_CODES,
     responseCodes: AUDIT_CODES,
   },
+  ...AGENT_OS_CONTROL_V1_ADMIN_OPERATION_CODE_DEFINITIONS,
 } as const satisfies Record<
   AgentOsControlV1RequestOperation,
   AgentOsControlV1OperationCodeDefinition
@@ -1854,6 +1873,14 @@ export function parseAgentOsControlV1ServiceRejection(
 export function parseAgentOsControlRequest(
   input: unknown,
 ): Readonly<AgentOsControlRequest> {
+  const raw = record(input, "Control request");
+  if (
+    typeof raw.operation === "string" &&
+    AGENT_OS_CONTROL_V1_ADMIN_REQUEST_OPERATIONS.some(
+      (candidate) => candidate === raw.operation,
+    )
+  )
+    return parseAgentOsControlV1AdminRequest(raw);
   const operation = readOperation(input, "request");
   if (operation.startsWith("control.admission."))
     return parseAgentOsControlAdmissionRequest(input);
@@ -1875,6 +1902,14 @@ export function parseAgentOsControlRequest(
 export function parseAgentOsControlReceipt(
   input: unknown,
 ): Readonly<AgentOsControlReceipt> {
+  const raw = record(input, "Control receipt");
+  if (
+    typeof raw.operation === "string" &&
+    AGENT_OS_CONTROL_V1_ADMIN_RECEIPT_OPERATIONS.some(
+      (candidate) => candidate === raw.operation,
+    )
+  )
+    return parseAgentOsControlV1AdminReceipt(raw);
   const operation = readOperation(input, "receipt");
   if (operation.startsWith("control.admission."))
     return parseAgentOsControlAdmissionReceipt(input);
@@ -1969,6 +2004,16 @@ export function canonicalAgentOsControlV1Source(input: unknown): string {
   const value = record(input, "Control message");
   if (value.operation === AGENT_OS_CONTROL_V1_SERVICE_REJECTION_OPERATION)
     return canonicalAgentOsControlServiceRejectionSource(value);
+  if (
+    typeof value.operation === "string" &&
+    (AGENT_OS_CONTROL_V1_ADMIN_REQUEST_OPERATIONS.some(
+      (candidate) => candidate === value.operation,
+    ) ||
+      AGENT_OS_CONTROL_V1_ADMIN_RECEIPT_OPERATIONS.some(
+        (candidate) => candidate === value.operation,
+      ))
+  )
+    return canonicalJson(parseAgentOsControlV1AdminMessage(value));
   const operation = readOperation(value, "Control message");
   return RECEIPT_OPERATIONS.has(operation)
     ? canonicalAgentOsControlReceiptSource(input)
@@ -2012,6 +2057,16 @@ export function parseAgentOsControlV1(
   const value = record(input, "Control message");
   if (value.operation === AGENT_OS_CONTROL_V1_SERVICE_REJECTION_OPERATION)
     return parseAgentOsControlServiceRejection(value);
+  if (
+    typeof value.operation === "string" &&
+    (AGENT_OS_CONTROL_V1_ADMIN_REQUEST_OPERATIONS.some(
+      (candidate) => candidate === value.operation,
+    ) ||
+      AGENT_OS_CONTROL_V1_ADMIN_RECEIPT_OPERATIONS.some(
+        (candidate) => candidate === value.operation,
+      ))
+  )
+    return parseAgentOsControlV1AdminMessage(value);
   const operation = readOperation(value, "Control message");
   return RECEIPT_OPERATIONS.has(operation)
     ? parseAgentOsControlReceipt(input)

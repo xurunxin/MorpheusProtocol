@@ -1,6 +1,6 @@
 {
   "name": "@xurunxin/morpheus-protocol-workspace",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "private": true,
   "description": "Morpheus 版本化协议与应用 SDK 开发仓库",
   "type": "module",

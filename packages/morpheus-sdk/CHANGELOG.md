@@ -1,5 +1,11 @@
 # 更新日志
 
+## 0.5.0
+
+- 新增无状态 `InteractiveV2AppClient` 及 Agent/workspace/execution/config/context/workspace helpers。
+- 新增 v2 transcript reducer，支持 snapshot rebuild、duplicate 去重、gap/conflict 与上下文漂移检测。
+- 与 Protocol 锁步升级至 0.5.0。
+
 ## 0.4.0
 
 - 与 Protocol 锁步升级至 0.4.0。

@@ -28,6 +28,23 @@ export {
   reduceInteractiveTranscript,
   transitionInteractiveProjection,
 } from "./interactive.js";
+export {
+  createAgentOsInteractiveV2AppClient,
+  createInteractiveV2AppClient,
+  reduceAgentOsInteractiveV2Transcript,
+  reduceInteractiveV2Transcript,
+  transitionInteractiveV2Projection,
+} from "./interactive-v2.js";
+export type {
+  InteractiveV2AppClient,
+  InteractiveV2AppRequestOptions,
+  InteractiveV2AppTransport,
+  InteractiveV2ProjectionExpectedContext,
+  InteractiveV2ProjectionRebuildReason,
+  InteractiveV2ProjectionState,
+  InteractiveV2ProjectionTransition,
+  InteractiveV2TranscriptStreamItem,
+} from "./interactive-v2.js";
 export type {
   InteractiveAppClient,
   InteractiveAppRequestOptions,

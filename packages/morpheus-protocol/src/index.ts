@@ -3,6 +3,7 @@ export * from "./agent-core-projected-sse-v2-errors.js";
 export * from "./agent-core-projected-sse-parser-v2.js";
 export * from "./agent-core-projected-sse-client-v2.js";
 export * from "./agent-os-interactive-v1-contract.js";
+export * from "./agent-os-interactive-v2-contract.js";
 
 export * as AgentOsV1 from "./agent-os-v1-contract.js";
 export * as AgentOsV1Reference from "./agent-os-v1-reference.js";
@@ -31,6 +32,7 @@ export type * from "./agent-os-worker-lease-v1-types.js";
 
 export * as AgentOsControlV1 from "./agent-os-control-v1-contract.js";
 export * from "./agent-os-control-v1-contract.js";
+export * from "./agent-os-control-v1-admin-contract.js";
 
 export * from "./tool-policy-types.js";
 export * from "./tool-policy-types.contract.js";

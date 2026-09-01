@@ -1,5 +1,12 @@
 # 更新日志
 
+## 0.5.0
+
+- 新增 `agent-os-interactive.v2`，覆盖 Agent、workspace、execution、config catalog、context binding 与 workspace change 契约。
+- 新增 v2 cursor/snapshot/event strict parser、canonical codec 与身份/digest/gap 校验。
+- 将 built-in Admin 的 WorkItem、TaskPlan、Message、Schedule、typed human-control 操作合并到唯一 `agent-os-control/v1` matrix/code inventory。
+- Protocol 与 SDK 锁步升级至 0.5.0。
+
 ## 0.4.0
 
 - 新增版本化 `agent-os-interactive.v1` App-plane 协议。

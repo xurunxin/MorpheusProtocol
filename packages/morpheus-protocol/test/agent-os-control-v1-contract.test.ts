@@ -414,6 +414,34 @@ const EXPECTED_OPERATION_MATRIX = [
     "control.human-control.policy.update.receipt",
   ],
   ["redacted-audit", "control.audit.append", "control.audit.append.receipt"],
+  ["work-item", "control.work-item.create", "control.work-item.create.receipt"],
+  ["work-item", "control.work-item.update", "control.work-item.update.receipt"],
+  ["work-item", "control.work-item.list", "control.work-item.list.receipt"],
+  ["work-item", "control.work-item.block", "control.work-item.block.receipt"],
+  [
+    "work-item",
+    "control.work-item.complete",
+    "control.work-item.complete.receipt",
+  ],
+  ["work-item", "control.work-item.fail", "control.work-item.fail.receipt"],
+  [
+    "work-item",
+    "control.work-item.spawn-subtasks",
+    "control.work-item.spawn-subtasks.receipt",
+  ],
+  ["task-plan", "control.task-plan.draft", "control.task-plan.draft.receipt"],
+  ["task-plan", "control.task-plan.accept", "control.task-plan.accept.receipt"],
+  ["task-plan", "control.task-plan.reject", "control.task-plan.reject.receipt"],
+  ["message", "control.message.send", "control.message.send.receipt"],
+  ["message", "control.message.list", "control.message.list.receipt"],
+  ["schedule", "control.schedule.create", "control.schedule.create.receipt"],
+  ["schedule", "control.schedule.list", "control.schedule.list.receipt"],
+  ["schedule", "control.schedule.cancel", "control.schedule.cancel.receipt"],
+  [
+    "human-control",
+    "control.human-control.command",
+    "control.human-control.command.receipt",
+  ],
 ] as const;
 
 const RECEIPT_CODES: readonly (readonly string[])[] = [
@@ -686,7 +714,7 @@ function expectDeepFrozen(value: unknown): void {
 }
 
 describe("agent-os-control/v1 contract", () => {
-  test("keeps the exact ordered 8-family/22-operation matrix", () => {
+  test("keeps the exact ordered legacy plus Admin operation matrix", () => {
     expect(
       AGENT_OS_CONTROL_V1_OPERATION_MATRIX.map((entry) => [
         entry.capability,
@@ -695,18 +723,23 @@ describe("agent-os-control/v1 contract", () => {
       ]),
     ).toEqual(EXPECTED_OPERATION_MATRIX);
     expect(
-      AGENT_OS_CONTROL_V1_OPERATION_MATRIX.map((entry) => entry.request),
+      AGENT_OS_CONTROL_V1_OPERATION_MATRIX.slice(0, requests().length).map(
+        (entry) => entry.request,
+      ),
     ).toEqual(requests().map((entry) => entry.operation));
-    expect(AGENT_OS_CONTROL_V1_OPERATION_MATRIX).toHaveLength(22);
+    expect(AGENT_OS_CONTROL_V1_OPERATION_MATRIX).toHaveLength(38);
     expect(AgentOsControlV1.AGENT_OS_CONTROL_V1_OPERATION_MATRIX).toBe(
       AGENT_OS_CONTROL_V1_OPERATION_MATRIX,
     );
   });
 
   test("exports a machine-readable operation and code inventory", () => {
-    expect(AGENT_OS_CONTROL_V1_OPERATION_CODE_INVENTORY).toHaveLength(22);
+    expect(AGENT_OS_CONTROL_V1_OPERATION_CODE_INVENTORY).toHaveLength(38);
     expect(
-      AGENT_OS_CONTROL_V1_OPERATION_CODE_INVENTORY.map((entry) => [
+      AGENT_OS_CONTROL_V1_OPERATION_CODE_INVENTORY.slice(
+        0,
+        RECEIPT_CODES.length,
+      ).map((entry) => [
         entry.capability,
         entry.request,
         entry.receipt,
@@ -714,13 +747,15 @@ describe("agent-os-control/v1 contract", () => {
         entry.responseCodes,
       ]),
     ).toEqual(
-      AGENT_OS_CONTROL_V1_OPERATION_MATRIX.map((entry, index) => [
-        entry.capability,
-        entry.request,
-        entry.receipt,
-        REQUEST_REJECTS[index],
-        RECEIPT_CODES[index],
-      ]),
+      AGENT_OS_CONTROL_V1_OPERATION_MATRIX.slice(0, RECEIPT_CODES.length).map(
+        (entry, index) => [
+          entry.capability,
+          entry.request,
+          entry.receipt,
+          REQUEST_REJECTS[index],
+          RECEIPT_CODES[index],
+        ],
+      ),
     );
     expect(AGENT_OS_CONTROL_V1_OPERATION_CODE_INVENTORY).not.toBe(
       AGENT_OS_CONTROL_V1_OPERATION_MATRIX,
