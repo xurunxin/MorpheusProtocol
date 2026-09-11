@@ -16,7 +16,7 @@
   },
   "scripts": {
     "clean": "bun scripts/clean.mjs",
-    "build": "bun run clean && bun x tsc -b --force && bun build packages/morpheus-protocol/src/index.ts --outdir packages/morpheus-protocol/dist --target browser --format esm && bun build packages/morpheus-sdk/src/index.ts --outdir packages/morpheus-sdk/dist --target browser --format esm --external @xurunxin/morpheus-protocol",
+    "build": "bun run clean && bun x tsc -b --force && bun build packages/morpheus-protocol/src/index.ts --outdir packages/morpheus-protocol/dist --target browser --format esm && bun build packages/morpheus-sdk/src/index.ts packages/morpheus-sdk/src/node-transport.ts packages/morpheus-sdk/src/browser-transport.ts --outdir packages/morpheus-sdk/dist --target browser --format esm --external @xurunxin/morpheus-protocol",
     "typecheck": "bun x tsc -b --force",
     "test": "bun test && bun run check:boundaries && bun run check:dependencies",
     "lint": "bun x eslint .",

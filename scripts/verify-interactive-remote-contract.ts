@@ -5,8 +5,10 @@
  *   1. strict   —— 已实现协议子集（agent-os-interactive.v3、
  *                  agent-os-remote-ingress.v1、agent-os-attachment.v1）的
  *                  严格解析 / 拒绝 / 幂等指纹自检（本任务交付）。
- *   2. browser-bundle —— 浏览器 bundle 消费自检（B03/B04 扩充，当前 deferred）。
- *   3. mixed-packed   —— 混合版本 / packed consumer 矩阵（B04 扩充，当前 deferred）。
+ *   2. browser-bundle —— 浏览器 bundle 消费自检（B03 交付）。
+ *   3. mixed-packed   —— 版本锁步 / 混合版本声明层拒绝 / packed 矩阵报告
+ *                        交叉校验（B04 交付；安装级矩阵由
+ *                        `bun run test:packed-consumer` 产出报告）。
  *
  * 约束：纯进程内合成数据；不读取 .env / 真实 provider 凭据 / 本地敏感路径；
  * 未实现阶段必须显式报告 deferred，不得伪造通过。
@@ -75,7 +77,13 @@ const HELP_TEXT = `N01 verify-interactive-remote-contract
                    的严格解析、拒绝与幂等指纹自检。
   browser-bundle   B03 交付：真实 SDK browser bundle 构建自检——不含
                    Node builtins 与 Host imports，只消费 Protocol。
-  mixed-packed     B04 扩充（当前 deferred）。
+  mixed-packed     B04 交付：root/protocol/sdk 版本锁步、SDK 对 Protocol 的
+                   exact 依赖（混合版本在声明层被拒绝）、node/browser
+                   subpath exports、v3 出口存在性，以及 packed-consumer
+                   矩阵报告（.artifacts/packed-consumer-report.json）的
+                   交叉校验与陈旧检测；报告缺失时该项显式 deferred。
+                   安装级 old-old/new-new/mixed 真实矩阵由
+                   bun run test:packed-consumer 执行。
 
 约束：进程内合成数据；不读取 .env 或真实凭据；deferred 阶段显式报告。
 `;
@@ -382,12 +390,6 @@ function runStrictStage(): StageResult {
     AgentOsAttachmentV1ContractError,
   );
 
-  // ── 未实现阶段（B04 交付）────────────────────────────────────────────
-  runner.deferred(
-    "mixed-packed 消费矩阵",
-    "deferred：由 B04 扩充（混合版本 / packed consumer）",
-  );
-
   const failed = runner.checks.some((check) => check.status === "fail");
   return {
     stage: "strict",
@@ -487,11 +489,133 @@ async function runBrowserBundleStage(): Promise<StageResult> {
   };
 }
 
-function deferredStage(stage: string, detail: string): StageResult {
+const PACKED_REPORT_SCHEMA =
+  "morpheus-protocol/packed-consumer-report/v1" as const;
+const EXACT_SEMVER = /^\d+\.\d+\.\d+$/u;
+const REPOSITORY_ROOT = path.resolve(import.meta.dirname, "..");
+
+interface PackageManifest {
+  readonly version: string;
+  readonly dependencies?: Record<string, string>;
+  readonly exports?: Record<string, unknown>;
+}
+
+async function readPackageManifest(
+  relativePath: string,
+): Promise<PackageManifest> {
+  return (await Bun.file(
+    path.join(REPOSITORY_ROOT, relativePath),
+  ).json()) as PackageManifest;
+}
+
+/**
+ * B04 mixed-packed 阶段：进程内版本矩阵声明层自检 + packed 矩阵报告交叉校验。
+ * 安装级 old-old/new-new/mixed 真实矩阵由 scripts/verify-packed-consumer.mjs
+ * （`bun run test:packed-consumer`）执行并产出报告；本阶段负责锁步与陈旧检测。
+ */
+async function runMixedPackedStage(): Promise<StageResult> {
+  const runner = new CheckRunner();
+  const rootManifest = await readPackageManifest("package.json");
+  const protocolManifest = await readPackageManifest(
+    "packages/morpheus-protocol/package.json",
+  );
+  const sdkManifest = await readPackageManifest(
+    "packages/morpheus-sdk/package.json",
+  );
+
+  runner.expect(() => {
+    if (
+      rootManifest.version !== protocolManifest.version ||
+      protocolManifest.version !== sdkManifest.version
+    )
+      throw new Error(
+        `版本未锁步：root=${rootManifest.version} protocol=${protocolManifest.version} sdk=${sdkManifest.version}`,
+      );
+  }, "root/protocol/sdk 版本锁步");
+
+  runner.expect(() => {
+    const spec = sdkManifest.dependencies?.["@xurunxin/morpheus-protocol"];
+    if (spec !== protocolManifest.version || !EXACT_SEMVER.test(spec ?? ""))
+      throw new Error(
+        `sdk 必须以 exact ${protocolManifest.version} 依赖 protocol（禁止 workspace/file/link/git/范围），实际 ${String(spec)}`,
+      );
+  }, "sdk 依赖 protocol 为 exact 同版本（混合版本在声明层被拒绝）");
+
+  runner.expect(() => {
+    const nodeEntry = sdkManifest.exports?.["./node"];
+    const browserEntry = sdkManifest.exports?.["./browser"];
+    if (!nodeEntry || !browserEntry)
+      throw new Error("sdk 缺少 ./node 或 ./browser subpath exports");
+  }, "sdk node/browser subpath exports 就绪（packed 消费前提）");
+
+  await runner.expectAsync(async () => {
+    const protocol = await import("../packages/morpheus-protocol/src/index.js");
+    if (
+      protocol.AGENT_OS_INTERACTIVE_V3_SCHEMA_VERSION !==
+      "agent-os-interactive.v3"
+    )
+      throw new Error("缺少 interactive v3 schema 常量");
+    if (typeof protocol.parseAgentOsInteractiveV3Request !== "function")
+      throw new Error("缺少 interactive v3 解析器");
+    const sdk = await import("../packages/morpheus-sdk/src/index.js");
+    if (typeof sdk.createInteractiveV3AppClient !== "function")
+      throw new Error("SDK 缺少 createInteractiveV3AppClient");
+    const nodeEntry =
+      await import("../packages/morpheus-sdk/src/node-transport.js");
+    if (typeof nodeEntry.createInteractiveJsonlStreamTransport !== "function")
+      throw new Error(
+        "SDK node 入口缺少 createInteractiveJsonlStreamTransport",
+      );
+    const browserEntry =
+      await import("../packages/morpheus-sdk/src/browser-transport.js");
+    if (typeof browserEntry.createBrowserInteractiveTransport !== "function")
+      throw new Error("SDK browser 入口缺少 createBrowserInteractiveTransport");
+  }, "v3 契约与 SDK node/browser 出口存在");
+
+  const packedReportPath = path.join(
+    REPOSITORY_ROOT,
+    ".artifacts",
+    "packed-consumer-report.json",
+  );
+  const packedReport = (await Bun.file(packedReportPath)
+    .json()
+    .catch(() => null)) as {
+    schemaVersion: string;
+    result: string;
+    artifacts: { candidate: ReadonlyArray<{ name: string; version: string }> };
+  } | null;
+  if (packedReport === null) {
+    runner.deferred(
+      "packed-consumer 矩阵报告交叉校验",
+      "deferred：.artifacts/packed-consumer-report.json 不存在；先运行 bun run test:packed-consumer",
+    );
+  } else {
+    runner.expect(() => {
+      if (packedReport.schemaVersion !== PACKED_REPORT_SCHEMA)
+        throw new Error(`报告 schema 不符：${packedReport.schemaVersion}`);
+      if (packedReport.result !== "pass")
+        throw new Error(`packed 矩阵结果为 ${packedReport.result}`);
+      const versions: Record<string, string> = {
+        "@xurunxin/morpheus-protocol": protocolManifest.version,
+        "@xurunxin/morpheus-sdk": sdkManifest.version,
+      };
+      for (const artifact of packedReport.artifacts.candidate) {
+        const expected = versions[artifact.name];
+        if (expected === undefined)
+          throw new Error(`报告出现未知候选包：${artifact.name}`);
+        if (artifact.version !== expected)
+          throw new Error(
+            `报告陈旧：${artifact.name}@${artifact.version} ≠ 当前 ${expected}；重新运行 bun run test:packed-consumer`,
+          );
+      }
+    }, "packed-consumer 矩阵报告交叉校验（含陈旧检测）");
+  }
+
+  const failed = runner.checks.some((check) => check.status === "fail");
   return {
-    stage,
-    status: "deferred",
-    checks: [{ name: stage, status: "deferred", detail }],
+    stage: "mixed-packed",
+    status: failed ? "fail" : "pass",
+    checks: runner.checks,
   };
 }
 
@@ -508,22 +632,38 @@ async function main(): Promise<void> {
   if (args.stage === "all" || args.stage === "browser-bundle")
     stages.push(await runBrowserBundleStage());
   if (args.stage === "all" || args.stage === "mixed-packed")
-    stages.push(
-      deferredStage(
-        "mixed-packed",
-        "deferred：由 B04 扩充（混合版本 / packed 矩阵）",
-      ),
-    );
+    stages.push(await runMixedPackedStage());
 
   const failed = stages.some((stage) => stage.status === "fail");
+  const [protocolVersion, sdkVersion] = await Promise.all([
+    readPackageManifest("packages/morpheus-protocol/package.json"),
+    readPackageManifest("packages/morpheus-sdk/package.json"),
+  ]);
   const report = {
     script: "scripts/verify-interactive-remote-contract.ts",
     gate: "N01",
-    owner: "B02 建立（B03 已扩充 browser-bundle；B04 扩充 mixed-packed）",
+    owner: "B02 建立（B03 扩充 browser-bundle；B04 交付 mixed-packed）",
     generatedAt: new Date().toISOString(),
     result: failed ? "fail" : "pass",
+    candidateIdentity: {
+      maturity: "candidate",
+      packages: [
+        {
+          name: "@xurunxin/morpheus-protocol",
+          version: protocolVersion.version,
+          integrity: null,
+          note: "未发布候选：SRI 由 pack 后的 packed-consumer-report 与 Integration 候选账本记录，此处不伪造",
+        },
+        {
+          name: "@xurunxin/morpheus-sdk",
+          version: sdkVersion.version,
+          integrity: null,
+          note: "未发布候选：SRI 由 pack 后的 packed-consumer-report 与 Integration 候选账本记录，此处不伪造",
+        },
+      ],
+    },
     stages,
-  };
+  } as Record<string, unknown>;
 
   if (args.out) {
     const resolved = path.resolve(args.out);

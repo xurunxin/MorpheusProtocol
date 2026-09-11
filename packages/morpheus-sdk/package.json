@@ -49,7 +49,7 @@
     "registry": "https://npm.pkg.github.com"
   },
   "scripts": {
-    "build": "bun x tsc -b --force && bun build src/index.ts --outdir dist --target browser --format esm --external @xurunxin/morpheus-protocol",
+    "build": "bun x tsc -b --force && bun build src/index.ts src/node-transport.ts src/browser-transport.ts --outdir dist --target browser --format esm --external @xurunxin/morpheus-protocol",
     "test": "bun run build && bun test test",
     "typecheck": "bun x tsc -b --force",
     "lint": "bun x eslint src test",
