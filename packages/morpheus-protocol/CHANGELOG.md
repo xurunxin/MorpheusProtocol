@@ -2,9 +2,14 @@
 
 ## 0.5.0
 
+- 新增 `agent-os-interactive.v3` profile：能力发现（implemented/configured/authorized/ready 四维状态）、command binding（proof/epoch/payload digest）、幂等 ack 响应与命令指纹。
+- 新增 `agent-os-remote-ingress.v1` 契约骨架：远端授权 proof 字段与有效期上限（fail closed 窗口校验）。
+- 新增 `agent-os-attachment.v1` 契约骨架：图像附件 wire 形状与限额（`attachment.image` capability 本切片 declared 未实现）。
+- transcript 事件流保持 `agent-os-interactive.v2` wire identity；v3 不承载事件语义。
+- 新增 N01 `scripts/verify-interactive-remote-contract.ts` strict/negative 验证脚本。
 - 新增 `agent-os-interactive.v2` catalog、context binding、workspace change DTO 及严格编解码器。
 - 新增 built-in Admin Control typed operations，并并入统一 Control v1 operation/code inventory。
-- 保持 interactive v1 与既有 Agent OS/Control 协议兼容。
+- 保持 interactive v1/v2 与既有 Agent OS/Control 协议兼容。
 
 ## 0.4.0
 
