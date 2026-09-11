@@ -28,6 +28,16 @@
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     },
+    "./node": {
+      "types": "./dist/node-transport.d.ts",
+      "import": "./dist/node-transport.js",
+      "default": "./dist/node-transport.js"
+    },
+    "./browser": {
+      "types": "./dist/browser-transport.d.ts",
+      "import": "./dist/browser-transport.js",
+      "default": "./dist/browser-transport.js"
+    },
     "./package.json": "./package.json"
   },
   "engines": {

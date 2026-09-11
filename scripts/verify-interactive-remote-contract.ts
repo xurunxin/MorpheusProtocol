@@ -73,7 +73,8 @@ const HELP_TEXT = `N01 verify-interactive-remote-contract
 阶段：
   strict           B02 交付：interactive v3 / remote ingress v1 / attachment v1
                    的严格解析、拒绝与幂等指纹自检。
-  browser-bundle   B03/B04 扩充（当前 deferred）。
+  browser-bundle   B03 交付：真实 SDK browser bundle 构建自检——不含
+                   Node builtins 与 Host imports，只消费 Protocol。
   mixed-packed     B04 扩充（当前 deferred）。
 
 约束：进程内合成数据；不读取 .env 或真实凭据；deferred 阶段显式报告。
@@ -159,6 +160,19 @@ class CheckRunner {
 
   deferred(name: string, detail: string): void {
     this.checks.push({ name, status: "deferred", detail });
+  }
+
+  async expectAsync(action: () => Promise<void>, name: string): Promise<void> {
+    try {
+      await action();
+      this.checks.push({ name, status: "pass", detail: "通过" });
+    } catch (error) {
+      this.checks.push({
+        name,
+        status: "fail",
+        detail: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
 }
 
@@ -368,18 +382,106 @@ function runStrictStage(): StageResult {
     AgentOsAttachmentV1ContractError,
   );
 
-  // ── 未实现阶段（B03/B04 交付）────────────────────────────────────────
-  const bundleAndPackedDeferred = (runner: CheckRunner): void => {
-    runner.deferred(
-      "browser-bundle 消费自检",
-      "deferred：由 B03/B04 扩充（browser bundle / packed 矩阵）",
-    );
-  };
-  bundleAndPackedDeferred(runner);
+  // ── 未实现阶段（B04 交付）────────────────────────────────────────────
+  runner.deferred(
+    "mixed-packed 消费矩阵",
+    "deferred：由 B04 扩充（混合版本 / packed consumer）",
+  );
 
   const failed = runner.checks.some((check) => check.status === "fail");
   return {
     stage: "strict",
+    status: failed ? "fail" : "pass",
+    checks: runner.checks,
+  };
+}
+
+const SDK_SRC_ROOT = path.resolve(
+  import.meta.dirname,
+  "../packages/morpheus-sdk/src",
+);
+const NODE_BUILTIN_PATTERN = /["']node:[A-Za-z][^"']*["']/u;
+const HOST_IMPORT_PATTERN =
+  /["']@xurunxin\/morpheus-(?:sdk|runtime|kernel|control|worker|personal-host|foundation|terminal|desktop|console|operator|integration)[^"']*["']/u;
+const IMPORT_SPECIFIER_PATTERN =
+  /(?:^|[\s;}])(?:import|export)\s[^;]*?from\s*["']([^"']+)["']/gu;
+
+/**
+ * B03 browser-bundle 阶段：用真实 bundler 以 browser 目标构建 SDK 的
+ * index / browser / node 三个入口，验证 bundle 不含 Node builtins、不引用
+ * Host 实现、外部模块只允许 Protocol（保持 external 不内联）。
+ */
+async function runBrowserBundleStage(): Promise<StageResult> {
+  const runner = new CheckRunner();
+  const entrypoints = [
+    path.join(SDK_SRC_ROOT, "index.ts"),
+    path.join(SDK_SRC_ROOT, "browser-transport.ts"),
+    path.join(SDK_SRC_ROOT, "node-transport.ts"),
+  ];
+  await runner.expectAsync(async () => {
+    const built = await Bun.build({
+      entrypoints,
+      target: "browser",
+      format: "esm",
+      external: ["@xurunxin/morpheus-protocol"],
+    });
+    if (!built.success) {
+      const detail = built.logs.map((log) => String(log)).join("; ");
+      throw new Error(`browser bundle 构建失败：${detail}`);
+    }
+    const outputs = await Promise.all(
+      built.outputs.map(async (artifact) => ({
+        artifactPath: artifact.path,
+        text: await artifact.text(),
+      })),
+    );
+    if (outputs.length !== entrypoints.length)
+      throw new Error(`输出数量不符：${outputs.length}`);
+    for (const output of outputs) {
+      if (NODE_BUILTIN_PATTERN.test(output.text))
+        throw new Error(`bundle 泄漏 Node builtin：${output.artifactPath}`);
+      if (HOST_IMPORT_PATTERN.test(output.text))
+        throw new Error(`bundle 泄漏 Host/SDK import：${output.artifactPath}`);
+      for (const match of output.text.matchAll(IMPORT_SPECIFIER_PATTERN)) {
+        const specifier = match[1];
+        if (
+          specifier !== "@xurunxin/morpheus-protocol" &&
+          !specifier.startsWith(".")
+        )
+          throw new Error(
+            `bundle 引入非法外部模块 ${specifier}：${output.artifactPath}`,
+          );
+      }
+    }
+    const indexBundle = outputs.find((output) =>
+      output.artifactPath.endsWith("index.js"),
+    );
+    if (!indexBundle) throw new Error("缺少 index bundle 输出");
+    if (!indexBundle.text.includes("@xurunxin/morpheus-protocol"))
+      throw new Error("Protocol 未保持 external，可能被内联进 bundle");
+  }, "SDK browser bundle 构建（index/browser/node 入口）");
+
+  await runner.expectAsync(async () => {
+    const sdkIndex = await import("../packages/morpheus-sdk/src/index.js");
+    if (typeof sdkIndex.createInteractiveV3AppClient !== "function")
+      throw new Error("SDK index 未导出 createInteractiveV3AppClient");
+    if (typeof sdkIndex.transitionInteractiveV3Projection !== "function")
+      throw new Error("SDK index 未导出 transitionInteractiveV3Projection");
+    if (typeof sdkIndex.runInteractiveV3TurnWithAbort !== "function")
+      throw new Error("SDK index 未导出 runInteractiveV3TurnWithAbort");
+    const nodeEntry =
+      await import("../packages/morpheus-sdk/src/node-transport.js");
+    if (typeof nodeEntry.createInteractiveJsonlStreamTransport !== "function")
+      throw new Error("node 入口未导出 createInteractiveJsonlStreamTransport");
+    const browserEntry =
+      await import("../packages/morpheus-sdk/src/browser-transport.js");
+    if (typeof browserEntry.createBrowserInteractiveTransport !== "function")
+      throw new Error("browser 入口未导出 createBrowserInteractiveTransport");
+  }, "SDK v3 导出面与 node/browser transport 入口存在");
+
+  const failed = runner.checks.some((check) => check.status === "fail");
+  return {
+    stage: "browser-bundle",
     status: failed ? "fail" : "pass",
     checks: runner.checks,
   };
@@ -404,12 +506,7 @@ async function main(): Promise<void> {
   if (args.stage === "all" || args.stage === "strict")
     stages.push(runStrictStage());
   if (args.stage === "all" || args.stage === "browser-bundle")
-    stages.push(
-      deferredStage(
-        "browser-bundle",
-        "deferred：由 B03/B04 扩充（browser bundle 自检）",
-      ),
-    );
+    stages.push(await runBrowserBundleStage());
   if (args.stage === "all" || args.stage === "mixed-packed")
     stages.push(
       deferredStage(
@@ -422,7 +519,7 @@ async function main(): Promise<void> {
   const report = {
     script: "scripts/verify-interactive-remote-contract.ts",
     gate: "N01",
-    owner: "B02（B03/B04 扩充）",
+    owner: "B02 建立（B03 已扩充 browser-bundle；B04 扩充 mixed-packed）",
     generatedAt: new Date().toISOString(),
     result: failed ? "fail" : "pass",
     stages,

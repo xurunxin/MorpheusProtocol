@@ -4,9 +4,9 @@
 
 ## 验证脚本（N 系列）
 
-| ID  | 入口                                                | Owner                  | 说明                                                                                                                                  |
-| --- | --------------------------------------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| N01 | `bun scripts/verify-interactive-remote-contract.ts` | B02 建立，B03/B04 扩充 | 先 strict/negative（interactive v3、remote ingress v1、attachment v1 严格解析/拒绝/幂等指纹）；再 browser bundle；最后混合版本/packed |
+| ID  | 入口                                                | Owner                                                      | 说明                                                                                                                                                                                                                        |
+| --- | --------------------------------------------------- | ---------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| N01 | `bun scripts/verify-interactive-remote-contract.ts` | B02 建立，B03 已扩充 browser-bundle，B04 扩充 mixed-packed | 先 strict/negative（interactive v3、remote ingress v1、attachment v1 严格解析/拒绝/幂等指纹）；browser bundle（B03 交付：真实 browser 目标 bundle 无 Node builtins/Host imports、外部模块仅 Protocol）；最后混合版本/packed |
 
 ### N01 用法
 
@@ -17,7 +17,8 @@ bun scripts/verify-interactive-remote-contract.ts [--help]
 ```
 
 - `--help` 显示帮助（先实现并自检 help 后才可执行）。
-- 阶段 `browser-bundle`、`mixed-packed` 由 B03/B04 扩充；当前运行显式报告 `deferred`，不计为通过。
+- 阶段 `browser-bundle` 由 B03 交付（真实 bundle 构建 + 泄漏扫描 + v3 导出面自检）；
+  阶段 `mixed-packed` 由 B04 扩充；当前运行显式报告 `deferred`，不计为通过。
 - 纯进程内合成数据；不读取 `.env` / 真实 provider 凭据 / 本地敏感路径。
 - 退出码：0 = 所有非 deferred 检查通过；1 = 存在 fail；2 = 参数非法。
 
