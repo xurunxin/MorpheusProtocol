@@ -5,6 +5,7 @@ import {
   AGENT_OS_REMOTE_INGRESS_V1_SCHEMA_VERSION,
   AgentOsAttachmentV1ContractError,
   AgentOsRemoteIngressV1ContractError,
+  createAgentOsRemoteIngressV1ProofSigningPayload,
   parseAgentOsAttachmentV1CommitResponse,
   parseAgentOsAttachmentV1Request,
   parseAgentOsRemoteIngressV1Proof,
@@ -29,6 +30,8 @@ function proof(
     issuedAt: "2026-08-30T00:00:00.000Z",
     expiresAt: "2026-08-30T00:00:20.000Z",
     authorityEpoch: 1,
+    keyId: "control-signing.1",
+    signature: "ab".repeat(64),
     ...overrides,
   };
 }
@@ -97,6 +100,67 @@ describe("agent-os-remote-ingress.v1 contract", () => {
         parseAgentOsRemoteIngressV1Proof(proof({ hostKind: "edge" })),
       ).code,
     ).toBe("INVALID_VALUE");
+  });
+
+  test("rejects missing or malformed signing key bindings", () => {
+    // 缺少 keyId/signature 的未签名 proof 一律拒绝（S01：签发方真实性强制）。
+    const { keyId: _keyId, ...unsigned } = proof();
+    expect(
+      expectIngressError(() => parseAgentOsRemoteIngressV1Proof(unsigned)).code,
+    ).toBe("INVALID_SHAPE");
+    const { signature: _signature, ...unsignedProof } = proof();
+    expect(
+      expectIngressError(() => parseAgentOsRemoteIngressV1Proof(unsignedProof))
+        .code,
+    ).toBe("INVALID_SHAPE");
+    expect(
+      expectIngressError(() =>
+        parseAgentOsRemoteIngressV1Proof(proof({ signature: "zz".repeat(64) })),
+      ).code,
+    ).toBe("INVALID_VALUE");
+    expect(
+      expectIngressError(() =>
+        parseAgentOsRemoteIngressV1Proof(proof({ signature: "ab".repeat(63) })),
+      ).code,
+    ).toBe("INVALID_VALUE");
+    expect(
+      expectIngressError(() =>
+        parseAgentOsRemoteIngressV1Proof(proof({ keyId: "" })),
+      ).code,
+    ).toBe("INVALID_VALUE");
+  });
+
+  test("builds a deterministic canonical signing payload that excludes the signature", () => {
+    const parsed = parseAgentOsRemoteIngressV1Proof(proof());
+    const { signature: _signature, ...unsigned } = parsed;
+    const payload = createAgentOsRemoteIngressV1ProofSigningPayload(unsigned);
+    const expected = JSON.stringify({
+      authorityEpoch: 1,
+      deviceId: "device.1",
+      expiresAt: "2026-08-30T00:00:20.000Z",
+      hostKind: "personal",
+      issuedAt: "2026-08-30T00:00:00.000Z",
+      keyId: "control-signing.1",
+      nonce: "nonce.1",
+      operation: "turn.start",
+      payloadDigest: digest("a"),
+      principal: "principal.owner",
+      proofId: "proof.1",
+      schemaVersion: AGENT_OS_REMOTE_INGRESS_V1_SCHEMA_VERSION,
+    });
+    expect(new TextDecoder().decode(payload)).toBe(expected);
+    // 可选 sessionId 参与规范编码；字段顺序不影响输出。
+    const withSession = parseAgentOsRemoteIngressV1Proof(
+      proof({ sessionId: "session.1" }),
+    );
+    const { signature: _ignored, ...unsignedSession } = withSession;
+    const sessionPayload =
+      createAgentOsRemoteIngressV1ProofSigningPayload(unsignedSession);
+    expect(
+      new TextDecoder()
+        .decode(sessionPayload)
+        .includes('"sessionId":"session.1"'),
+    ).toBe(true);
   });
 
   test("validates the proof window and fails closed", () => {

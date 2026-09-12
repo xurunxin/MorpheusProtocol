@@ -5,6 +5,8 @@
 - 新增 `agent-os-interactive.v2`，覆盖 Agent、workspace、execution、config catalog、context binding 与 workspace change 契约。
 - 新增 v2 cursor/snapshot/event strict parser、canonical codec 与身份/digest/gap 校验。
 - 将 built-in Admin 的 WorkItem、TaskPlan、Message、Schedule、typed human-control 操作合并到唯一 `agent-os-control/v1` matrix/code inventory。
+- 新增 `agent-os-remote-ingress.v1` 远端授权 proof 契约：proof 携带 Ed25519 `signature` 与签发密钥 `keyId`，并提供规范签名载荷编解码（`createAgentOsRemoteIngressV1ProofSigningPayload`），Host 侧可验证签发方真实性。
+- SDK v3 客户端强制命令成功终态（accepted/completed）必须携带 command receipt；rejected 为独立拒绝语义。
 - Protocol 与 SDK 锁步升级至 0.5.0。
 
 ## 0.4.0

@@ -134,6 +134,10 @@ export const createAgentOsInteractiveV3AppClient = createInteractiveV3AppClient;
 /**
  * M3/M4 客户端侧完整性：宿主回执必须回显本端 commandId，且 payloadDigest
  * 等于按同一 canonical 指纹算法重算的结果；不一致视为 transport 篡改。
+ *
+ * 回执强制（审查 P01）：携带 command binding 的请求，凡以成功终态
+ * （accepted/completed）返回都必须携带 receipt——省略回执即绕过命令结果
+ * 绑定，视为协议违例。rejected 是独立的拒绝语义，允许没有回执。
  */
 function verifyCommandReceipt(
   request: Readonly<AgentOsInteractiveV3Request>,
@@ -141,8 +145,13 @@ function verifyCommandReceipt(
 ): void {
   const command = request.command;
   if (command === undefined) return;
-  if (!("receipt" in response) || response.receipt === undefined) return;
-  const receipt = response.receipt;
+  const receipt = "receipt" in response ? response.receipt : undefined;
+  const status = "status" in response ? response.status : undefined;
+  if (status !== "rejected" && receipt === undefined)
+    throw new TypeError(
+      "interactive v3 command success requires a command receipt",
+    );
+  if (receipt === undefined) return;
   if (receipt.commandId !== command.commandId)
     throw new TypeError(
       "interactive v3 command receipt commandId does not match request",

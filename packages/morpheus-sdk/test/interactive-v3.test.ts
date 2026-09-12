@@ -214,6 +214,57 @@ describe("stateless InteractiveV3AppClient", () => {
     expect(client.request(request)).rejects.toBeInstanceOf(TypeError);
   });
 
+  test("rejects a success terminal ack that omits the command receipt (P01)", () => {
+    const request = v3TurnStart();
+    // completed + 无 receipt：省略回执不能绕过命令结果绑定。
+    const completedNoReceipt = createInteractiveV3AppClient({
+      request: async () => ({
+        schemaVersion: AGENT_OS_INTERACTIVE_V3_SCHEMA_VERSION,
+        operation: "turn.start",
+        requestId: request.requestId,
+        status: "completed",
+        replayed: false,
+        sessionId: request.sessionId,
+        turnId: request.turnId,
+      }),
+    });
+    expect(completedNoReceipt.request(request)).rejects.toThrow(
+      "requires a command receipt",
+    );
+    // accepted + 无 receipt：同样视为协议违例。
+    const acceptedNoReceipt = createInteractiveV3AppClient({
+      request: async () => ({
+        schemaVersion: AGENT_OS_INTERACTIVE_V3_SCHEMA_VERSION,
+        operation: "turn.start",
+        requestId: request.requestId,
+        status: "accepted",
+        replayed: false,
+        sessionId: request.sessionId,
+      }),
+    });
+    expect(acceptedNoReceipt.request(request)).rejects.toThrow(
+      "requires a command receipt",
+    );
+  });
+
+  test("defines rejection semantics separately: a rejected ack needs no receipt", async () => {
+    const request = v3TurnStart();
+    const client = createInteractiveV3AppClient({
+      request: async () => ({
+        schemaVersion: AGENT_OS_INTERACTIVE_V3_SCHEMA_VERSION,
+        operation: "turn.start",
+        requestId: request.requestId,
+        status: "rejected",
+        replayed: false,
+        sessionId: request.sessionId,
+        reason: "policy denied",
+      }),
+    });
+    const response = await client.request(request);
+    expect(response.status).toBe("rejected");
+    expect(response).not.toHaveProperty("receipt");
+  });
+
   test("rejects mismatched requestId and operation correlation", () => {
     const request = v3TurnStart();
     const mismatchedId = createInteractiveV3AppClient({

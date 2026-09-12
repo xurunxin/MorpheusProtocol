@@ -8,7 +8,9 @@ MorpheusProtocol 提供 Morpheus 的版本化协议、严格 Schema 解析与应
 - `@xurunxin/morpheus-sdk`：面向 Terminal、Desktop、Operator 与 Console 的轻量客户端编排。
 - `agent-os/v1`：Morpheus 的第一版运行协议标识。
 - `agent-os-interactive.v2`：全屏 TUI 的 Agent、workspace、execution、config catalog、context binding 与 workspace change 交互契约。
+- `agent-os-interactive.v3`：v2 数据面之上的命令绑定交互 profile，turn.start/turn.cancel 携带 command binding 与宿主回执。
 - `agent-os-control/v1`：包含 built-in Admin 的 WorkItem、TaskPlan、Message、Schedule 与 typed human-control 操作。
+- `agent-os-remote-ingress.v1`：远端授权 proof 契约；proof 携带 Ed25519 `signature` 与签发密钥 `keyId`，验证方以钉扎公钥复验签发方真实性。
 
 ## 不负责范围
 

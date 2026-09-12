@@ -27,6 +27,13 @@ export const AGENT_OS_REMOTE_INGRESS_V1_LIMITS = Object.freeze({
   revocationPropagationSeconds: 5,
 } as const);
 
+/**
+ * Ed25519 签名的 hex 长度（64 字节 → 128 hex 字符）。签发方（Control
+ * client-session authority）以签发私钥对规范签名载荷签名；验证方（Host
+ * Connector）以 enrollment 时钉扎的同源公钥复验。
+ */
+const SIGNATURE_PATTERN = /^[0-9a-f]{128}$/u;
+
 export type AgentOsRemoteIngressV1ContractErrorCode =
   | "INVALID_SHAPE"
   | "INVALID_VALUE"
@@ -55,6 +62,11 @@ const RFC3339_PATTERN =
  * 操作绑定 proof（03-protocol §远程传输 4–5）：绑定具体 command payload
  * digest、target 与短有效期；Host ingress 校验签名/主体/target/nonce/epoch/
  * 有效期与最新本地 consent，dispatch 前再次确认。
+ *
+ * 签发方真实性（S01）：`signature` 是签发方 Ed25519 私钥对
+ * {@link createAgentOsRemoteIngressV1ProofSigningPayload} 输出字节的签名，
+ * `keyId` 标识签发密钥。Bridge 只是转发者，无法伪造或改写 proof 字段——
+ * 任何字段漂移都会破坏签名。
  */
 export interface AgentOsRemoteIngressV1Proof {
   readonly schemaVersion: AgentOsRemoteIngressV1SchemaVersion;
@@ -69,6 +81,10 @@ export interface AgentOsRemoteIngressV1Proof {
   readonly issuedAt: string;
   readonly expiresAt: string;
   readonly authorityEpoch: number;
+  /** 签发密钥标识；验证方只接受与钉扎公钥一致的 keyId。 */
+  readonly keyId: string;
+  /** Ed25519 签名（hex，128 字符），覆盖除自身外的全部 proof 字段。 */
+  readonly signature: string;
 }
 
 export function parseAgentOsRemoteIngressV1Proof(
@@ -89,6 +105,8 @@ export function parseAgentOsRemoteIngressV1Proof(
       "issuedAt",
       "expiresAt",
       "authorityEpoch",
+      "keyId",
+      "signature",
     ],
     ["sessionId"],
     "remote ingress proof",
@@ -98,6 +116,11 @@ export function parseAgentOsRemoteIngressV1Proof(
   const hostKind = value.hostKind;
   if (hostKind !== "personal" && hostKind !== "worker")
     fail("INVALID_VALUE", "hostKind is invalid");
+  if (
+    typeof value.signature !== "string" ||
+    !SIGNATURE_PATTERN.test(value.signature)
+  )
+    fail("INVALID_VALUE", "proof signature is invalid");
   return freeze({
     schemaVersion: AGENT_OS_REMOTE_INGRESS_V1_SCHEMA_VERSION,
     proofId: identifier(value.proofId, "proofId"),
@@ -115,7 +138,24 @@ export function parseAgentOsRemoteIngressV1Proof(
     issuedAt: timestamp(value.issuedAt, "issuedAt"),
     expiresAt: timestamp(value.expiresAt, "expiresAt"),
     authorityEpoch: nonNegativeNumber(value.authorityEpoch, "authorityEpoch"),
+    keyId: identifier(value.keyId, "keyId"),
+    signature: value.signature,
   }) as Readonly<AgentOsRemoteIngressV1Proof>;
+}
+
+/**
+ * proof 的规范签名载荷（S01）：字段名按 ASCII 排序、排除 `signature` 自身、
+ * 紧凑 JSON、UTF-8 字节。签发方与验证方必须基于同一份字节序列；
+ * 本函数是唯一的规范编码来源。
+ */
+export function createAgentOsRemoteIngressV1ProofSigningPayload(
+  proof: Omit<AgentOsRemoteIngressV1Proof, "signature">,
+): Uint8Array {
+  const canonical: Record<string, unknown> = {};
+  for (const key of Object.keys(proof).sort()) {
+    canonical[key] = proof[key as keyof typeof proof];
+  }
+  return new TextEncoder().encode(JSON.stringify(canonical));
 }
 
 /**
