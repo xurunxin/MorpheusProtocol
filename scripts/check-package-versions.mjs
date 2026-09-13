@@ -13,11 +13,8 @@ const release = resolveReleaseContract(
     ? process.env.GITHUB_REF_NAME
     : undefined,
 );
-assert(rootManifest.packageManager === "bun@1.3.14", "根仓必须固定 Bun 1.3.14");
-assert(
-  rootManifest.engines?.bun === "1.3.14",
-  "根仓必须固定 Bun engine 1.3.14",
-);
+assert(rootManifest.packageManager === "bun@1.4.0", "根仓必须固定 Bun 1.4.0");
+assert(rootManifest.engines?.bun === "1.4.0", "根仓必须固定 Bun engine 1.4.0");
 assert(
   protocol.version === rootManifest.version,
   "Protocol 版本必须与根版本一致",
@@ -33,8 +30,8 @@ for (const [name, value] of [
   ["SDK", sdk],
 ]) {
   assert(value.license === "Apache-2.0", `${name} 必须使用 Apache-2.0`);
-  assert(value.packageManager === "bun@1.3.14", `${name} 必须固定 Bun 1.3.14`);
-  assert(value.engines?.bun === "1.3.14", `${name} 必须固定 Bun engine 1.3.14`);
+  assert(value.packageManager === "bun@1.4.0", `${name} 必须固定 Bun 1.4.0`);
+  assert(value.engines?.bun === "1.4.0", `${name} 必须固定 Bun engine 1.4.0`);
   assert(value.repository?.url, `${name} 缺少 repository`);
   assert(value.description, `${name} 缺少 description`);
   assert(value.exports?.["."], `${name} 缺少根 exports`);

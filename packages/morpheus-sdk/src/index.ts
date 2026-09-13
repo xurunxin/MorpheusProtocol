@@ -14,6 +14,26 @@ export type {
   RunPromptWithAbortOptions,
   RunPromptWithAbortOutcome,
 } from "./abort.js";
+export { runInteractiveV3TurnWithAbort } from "./abort.js";
+export type {
+  RunInteractiveV3TurnWithAbortOptions,
+  RunInteractiveV3TurnWithAbortOutcome,
+} from "./abort.js";
+export { createInteractiveV3AppClient } from "./interactive-v3.js";
+export {
+  createAgentOsInteractiveV3AppClient,
+  reduceInteractiveV3Transcript,
+  transitionInteractiveV3Projection,
+} from "./interactive-v3.js";
+export type {
+  InteractiveV3AppClient,
+  InteractiveV3AppRequestOptions,
+  InteractiveV3AppTransport,
+  InteractiveV3ProjectionExpectedContext,
+  InteractiveV3ProjectionState,
+  InteractiveV3ProjectionTransition,
+  InteractiveV3TranscriptStreamItem,
+} from "./interactive-v3.js";
 export { transitionPromptProjection } from "./projection.js";
 export type {
   PromptProjectionRebuildReason,

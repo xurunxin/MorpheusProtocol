@@ -3,7 +3,7 @@
   "version": "0.5.0",
   "description": "Morpheus 应用层轻量客户端 SDK",
   "type": "module",
-  "packageManager": "bun@1.3.14",
+  "packageManager": "bun@1.4.0",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
@@ -28,18 +28,28 @@
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     },
+    "./node": {
+      "types": "./dist/node-transport.d.ts",
+      "import": "./dist/node-transport.js",
+      "default": "./dist/node-transport.js"
+    },
+    "./browser": {
+      "types": "./dist/browser-transport.d.ts",
+      "import": "./dist/browser-transport.js",
+      "default": "./dist/browser-transport.js"
+    },
     "./package.json": "./package.json"
   },
   "engines": {
     "node": ">=20",
-    "bun": "1.3.14"
+    "bun": "1.4.0"
   },
   "publishConfig": {
     "access": "public",
     "registry": "https://npm.pkg.github.com"
   },
   "scripts": {
-    "build": "bun x tsc -b --force && bun build src/index.ts --outdir dist --target browser --format esm --external @xurunxin/morpheus-protocol",
+    "build": "bun x tsc -b --force && bun build src/index.ts src/node-transport.ts src/browser-transport.ts --outdir dist --target browser --format esm --external @xurunxin/morpheus-protocol",
     "test": "bun run build && bun test test",
     "typecheck": "bun x tsc -b --force",
     "lint": "bun x eslint src test",

@@ -4,6 +4,9 @@ export * from "./agent-core-projected-sse-parser-v2.js";
 export * from "./agent-core-projected-sse-client-v2.js";
 export * from "./agent-os-interactive-v1-contract.js";
 export * from "./agent-os-interactive-v2-contract.js";
+export * from "./agent-os-interactive-v3-contract.js";
+export * from "./agent-os-remote-ingress-v1-contract.js";
+export * from "./agent-os-attachment-v1-contract.js";
 
 export * as AgentOsV1 from "./agent-os-v1-contract.js";
 export * as AgentOsV1Reference from "./agent-os-v1-reference.js";

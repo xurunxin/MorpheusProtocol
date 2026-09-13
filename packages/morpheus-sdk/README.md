@@ -11,6 +11,8 @@ Morpheus App Plane 的轻量客户端 SDK。它组合公开协议 DTO 与调用�
 - 提供无状态 `InteractiveAppClient` 与唯一确定性的 transcript reducer。
 - 提供无状态 `InteractiveV2AppClient`，包含 Agent/workspace/execution/config catalog、context binding、workspace change helpers。
 - 提供 `InteractiveV2` reducer，识别 duplicate、gap、conflict 与 binding/session drift。
+- 提供无状态 `InteractiveV3AppClient`（`agent-os-interactive.v3`）：command binding 回执指纹校验、`capability.read`、transcript 订阅沿用 v2 数据面并共用同一 reducer。
+- 提供环境 transport 入口：`@xurunxin/morpheus-sdk/node`（注入式 JSONL duplex，面向 Node IPC/named pipe）与 `@xurunxin/morpheus-sdk/browser`（注入式 fetch/WebSocket）。
 
 ## 不负责范围
 
@@ -62,14 +64,55 @@ const catalog = await interactive.readAgentCatalog({
 });
 ```
 
+v3 客户端与 v2 共用同一个数据面 reducer；回执会按 canonical 命令指纹校验：
+
+```ts
+import { createInteractiveV3AppClient } from "@xurunxin/morpheus-sdk";
+
+const interactive = createInteractiveV3AppClient({
+  request: (request, signal) => transport.request(request, signal),
+  subscribe: (request, signal) => transport.subscribe(request, signal),
+});
+const capabilities = await interactive.readCapabilities({
+  schemaVersion: "agent-os-interactive.v3",
+  operation: "capability.read",
+  requestId: "request.capability.1",
+});
+```
+
+环境 transport 入口只做 wire 适配，连接与端点全部由调用方注入：
+
+```ts
+// Node 专属入口（Node IPC / named pipe；连接由 net.connect 等注入）。
+import { createInteractiveJsonlStreamTransport } from "@xurunxin/morpheus-sdk/node";
+
+const nodeTransport = createInteractiveJsonlStreamTransport({
+  connect: () => net.connect(pipePath),
+});
+
+// browser-safe 入口（fetch + WebSocket 全部注入，endpoint 显式提供）。
+import { createBrowserInteractiveTransport } from "@xurunxin/morpheus-sdk/browser";
+
+const browserTransport = createBrowserInteractiveTransport({
+  requestEndpoint,
+  webSocketFactory: () => new WebSocket(subscribeUrl),
+  fetch,
+});
+```
+
 ## 依赖边界
 
 本包只精确依赖同版本 `@xurunxin/morpheus-protocol`。应用应通过公开 SDK 与版本化协议协作。
+主入口与 `./browser` 入口不包含 Node 内建依赖；`./node` 入口同样不 import `node:*`，
+连接由调用方注入，因此真实 browser bundle 不携带 Node builtins 或 Host 实现。
 
 ## 当前限制
 
 传输重试、持久化和服务发现由应用提供。交互投影出现序列缺口、冲突或上下文漂移时，
-v1/v2 reducer 返回 `rebuild-required`，调用方需要重新获取完整快照；SDK 不会自动重发 prompt。
+v1/v2/v3 reducer 返回 `rebuild-required`，调用方需要重新获取完整快照；SDK 不会自动重发 prompt。
+订阅关闭（`break`/`return`/abort）、socket EOF 与浏览器页面刷新只拆除 wire 订阅，
+绝不合成 `turn.cancel`；取消必须是携带 command binding 的显式命令（或经
+`runInteractiveV3TurnWithAbort` 编排）。
 
 ## 许可证
 
