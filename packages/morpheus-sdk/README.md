@@ -2,6 +2,8 @@
 
 Morpheus App Plane 的轻量客户端 SDK。它组合公开协议 DTO 与调用方注入的传输，不保存服务端状态。
 
+单机适配服务可使用 `createInteractiveV2AppClient` 与 `@xurunxin/morpheus-sdk/node` 的 `createInteractiveJsonlStreamTransport` 连接 Host 的本机管道。传输连接由调用方提供；HTTP/SSE 转换不接管 Host 的会话、Run、授权或取消状态。
+
 ## 能力
 
 - 创建 Prompt 客户端编排。

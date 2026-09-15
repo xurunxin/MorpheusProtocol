@@ -157,7 +157,10 @@ export interface InteractiveV2AppClient {
     options?: Readonly<InteractiveV2AppRequestOptions>,
   ) => Promise<
     Readonly<
-      Extract<AgentOsInteractiveV2Response, { operation: "config.status.read" }>
+      Extract<
+        AgentOsInteractiveV2Response,
+        { operation: "config.status.read" | "config.reconcile" }
+      >
     >
   >;
   readonly reconcileConfig: (
@@ -167,7 +170,10 @@ export interface InteractiveV2AppClient {
     options?: Readonly<InteractiveV2AppRequestOptions>,
   ) => Promise<
     Readonly<
-      Extract<AgentOsInteractiveV2Response, { operation: "config.reconcile" }>
+      Extract<
+        AgentOsInteractiveV2Response,
+        { operation: "config.status.read" | "config.reconcile" }
+      >
     >
   >;
   readonly previewWorkspaceChanges: (

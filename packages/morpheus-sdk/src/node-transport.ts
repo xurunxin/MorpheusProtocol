@@ -1,4 +1,14 @@
-import type { InteractiveV3AppTransport } from "./interactive-v3.js";
+/** 无状态字节传输同时接收 v2 和 v3，具体协议由上层 SDK 校验。 */
+export interface InteractiveJsonlStreamTransport {
+  readonly request: (
+    request: Readonly<unknown>,
+    signal?: AbortSignal,
+  ) => Promise<unknown>;
+  readonly subscribe: (
+    request: Readonly<unknown>,
+    signal?: AbortSignal,
+  ) => AsyncIterable<unknown>;
+}
 
 /**
  * `@xurunxin/morpheus-sdk/node` · Node IPC / named-pipe 专属入口。
@@ -32,7 +42,7 @@ export interface CreateInteractiveJsonlTransportOptions {
  */
 export function createInteractiveJsonlStreamTransport(
   options: Readonly<CreateInteractiveJsonlTransportOptions>,
-): Readonly<InteractiveV3AppTransport> {
+): Readonly<InteractiveJsonlStreamTransport> {
   if (typeof options.connect !== "function")
     throw new TypeError(
       "CreateInteractiveJsonlTransportOptions.connect must be a function",

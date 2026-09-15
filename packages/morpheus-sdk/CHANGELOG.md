@@ -1,5 +1,9 @@
 # 更新日志
 
+## 未发布
+
+- Node JSONL 传输与 Interactive v2 类型兼容；配置状态读取及 reconcile 返回明确响应类型。
+
 ## 0.5.0
 
 - 新增无状态 `InteractiveV3AppClient`（`agent-os-interactive.v3`）：command binding 回执按 canonical 指纹校验、`capability.read` helper；transcript 订阅保持 v2 数据面 wire identity 并与 v2 共用同一确定性 reducer（dedup、乱序、缺口 rebuild、恢复快照一致）。

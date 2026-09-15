@@ -1,5 +1,9 @@
 # 更新日志
 
+## 未发布
+
+- SDK 的 Node JSONL 传输支持 Interactive v2 与 v3 客户端；修正配置读取和 reconcile 响应的类型提取，供单机 HTTP/SSE 适配服务使用。
+
 ## 0.5.0
 
 - 新增 `agent-os-interactive.v2`，覆盖 Agent、workspace、execution、config catalog、context binding 与 workspace change 契约。
