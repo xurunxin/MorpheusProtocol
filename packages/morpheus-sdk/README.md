@@ -1,5 +1,9 @@
 # @xurunxin/morpheus-sdk
 
+0.6.0 候选新增 `createInteractiveV4AppClient` 与 `transitionInteractiveV4Queue`。
+命令先读取同一可信连接的 capabilities，显式传入 `{ capabilities, signal }`；不支持的操作
+fail closed。Reducer 对 gap/conflict/倒退要求 snapshot 重建，连接恢复不会自动重发 prompt。
+
 Morpheus App Plane 的轻量客户端 SDK。它组合公开协议 DTO 与调用方注入的传输，不保存服务端状态。
 
 单机适配服务可使用 `createInteractiveV2AppClient` 与 `@xurunxin/morpheus-sdk/node` 的 `createInteractiveJsonlStreamTransport` 连接 Host 的本机管道。传输连接由调用方提供；HTTP/SSE 转换不接管 Host 的会话、Run、授权或取消状态。

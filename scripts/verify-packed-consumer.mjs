@@ -331,7 +331,16 @@ function writeV3Consumer(consumerDirectory) {
       `if (typeof createInteractiveV2AppClient !== "function") throw new Error("missing Interactive v2 App SDK");\n` +
       `if (typeof createInteractiveV3AppClient !== "function" || typeof transitionInteractiveV3Projection !== "function" || typeof runInteractiveV3TurnWithAbort !== "function") throw new Error("missing Interactive v3 App SDK");\n` +
       `if (typeof createInteractiveJsonlStreamTransport !== "function") throw new Error("missing sdk/node transport");\n` +
-      `if (typeof createBrowserInteractiveTransport !== "function") throw new Error("missing sdk/browser transport");\n`,
+      `if (typeof createBrowserInteractiveTransport !== "function") throw new Error("missing sdk/browser transport");\n` +
+      `const p4 = await import("@xurunxin/morpheus-protocol");\n` +
+      `const s4 = await import("@xurunxin/morpheus-sdk");\n` +
+      `const owner = {sessionId:"s",runId:"r",turnId:"t",bindingRevision:1,fence:1};\n` +
+      `const request = {schemaVersion:"agent-os-interactive.v4",operation:"prompt.queue.read",requestId:"q",owner};\n` +
+      `p4.decodeAgentOsInteractiveV4Request(p4.serializeAgentOsInteractiveV4Request(request));\n` +
+      `let refused = false; try { parseAgentOsInteractiveV3Request(request); } catch { refused = true; }\n` +
+      `if (!refused) throw new Error("v3 accepted v4 input");\n` +
+      `const state = s4.transitionInteractiveV4Queue(null,{owner,queueRevision:0,inputs:[]},owner,"snapshot");\n` +
+      `if (state.kind !== "committed" || typeof s4.createInteractiveV4AppClient !== "function") throw new Error("v4 consumer failed");\n`,
     "utf8",
   );
 }

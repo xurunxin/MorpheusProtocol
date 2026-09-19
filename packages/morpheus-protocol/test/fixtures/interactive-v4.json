@@ -1,0 +1,155 @@
+{
+  "request": {
+    "schemaVersion": "agent-os-interactive.v4",
+    "operation": "prompt.steer",
+    "requestId": "request.fixture",
+    "owner": {
+      "sessionId": "session.fixture",
+      "runId": "run.fixture",
+      "turnId": "turn.fixture",
+      "bindingRevision": 2,
+      "fence": 3
+    },
+    "inputId": "input.fixture",
+    "instruction": "保留原始执行证据",
+    "command": {
+      "commandId": "command.fixture",
+      "principal": "user.fixture",
+      "payloadDigest": "sha256:61ca73ca1d7b5aa731841c9a38265d66e1c3228395bbfadcf77f9abdd2ed1cb0"
+    }
+  },
+  "receipts": [
+    {
+      "inputId": "input.fixture",
+      "requestId": "request.fixture",
+      "commandId": "command.fixture",
+      "payloadDigest": "sha256:61ca73ca1d7b5aa731841c9a38265d66e1c3228395bbfadcf77f9abdd2ed1cb0",
+      "owner": {
+        "sessionId": "session.fixture",
+        "runId": "run.fixture",
+        "turnId": "turn.fixture",
+        "bindingRevision": 2,
+        "fence": 3
+      },
+      "source": "user",
+      "kind": "steer",
+      "acceptedSequence": 1,
+      "queueRevision": 1,
+      "status": "queued",
+      "binding": null,
+      "reason": null
+    },
+    {
+      "inputId": "input.fixture",
+      "requestId": "request.fixture",
+      "commandId": "command.fixture",
+      "payloadDigest": "sha256:61ca73ca1d7b5aa731841c9a38265d66e1c3228395bbfadcf77f9abdd2ed1cb0",
+      "owner": {
+        "sessionId": "session.fixture",
+        "runId": "run.fixture",
+        "turnId": "turn.fixture",
+        "bindingRevision": 2,
+        "fence": 3
+      },
+      "source": "user",
+      "kind": "steer",
+      "acceptedSequence": 1,
+      "queueRevision": 2,
+      "status": "bound",
+      "binding": {
+        "requestSnapshotId": "snapshot.fixture",
+        "effectId": "effect.fixture",
+        "requestDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "reason": null
+    },
+    {
+      "inputId": "input.fixture",
+      "requestId": "request.fixture",
+      "commandId": "command.fixture",
+      "payloadDigest": "sha256:61ca73ca1d7b5aa731841c9a38265d66e1c3228395bbfadcf77f9abdd2ed1cb0",
+      "owner": {
+        "sessionId": "session.fixture",
+        "runId": "run.fixture",
+        "turnId": "turn.fixture",
+        "bindingRevision": 2,
+        "fence": 3
+      },
+      "source": "user",
+      "kind": "steer",
+      "acceptedSequence": 1,
+      "queueRevision": 3,
+      "status": "unknown",
+      "binding": {
+        "requestSnapshotId": "snapshot.fixture",
+        "effectId": "effect.fixture",
+        "requestDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "reason": null
+    },
+    {
+      "inputId": "input.fixture",
+      "requestId": "request.fixture",
+      "commandId": "command.fixture",
+      "payloadDigest": "sha256:61ca73ca1d7b5aa731841c9a38265d66e1c3228395bbfadcf77f9abdd2ed1cb0",
+      "owner": {
+        "sessionId": "session.fixture",
+        "runId": "run.fixture",
+        "turnId": "turn.fixture",
+        "bindingRevision": 2,
+        "fence": 3
+      },
+      "source": "user",
+      "kind": "steer",
+      "acceptedSequence": 1,
+      "queueRevision": 4,
+      "status": "settled",
+      "binding": {
+        "requestSnapshotId": "snapshot.fixture",
+        "effectId": "effect.fixture",
+        "requestDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "reason": null
+    },
+    {
+      "inputId": "input.fixture",
+      "requestId": "request.fixture",
+      "commandId": "command.fixture",
+      "payloadDigest": "sha256:61ca73ca1d7b5aa731841c9a38265d66e1c3228395bbfadcf77f9abdd2ed1cb0",
+      "owner": {
+        "sessionId": "session.fixture",
+        "runId": "run.fixture",
+        "turnId": "turn.fixture",
+        "bindingRevision": 2,
+        "fence": 3
+      },
+      "source": "user",
+      "kind": "steer",
+      "acceptedSequence": 1,
+      "queueRevision": 5,
+      "status": "cancelled",
+      "binding": null,
+      "reason": null
+    },
+    {
+      "inputId": "input.fixture",
+      "requestId": "request.fixture",
+      "commandId": "command.fixture",
+      "payloadDigest": "sha256:61ca73ca1d7b5aa731841c9a38265d66e1c3228395bbfadcf77f9abdd2ed1cb0",
+      "owner": {
+        "sessionId": "session.fixture",
+        "runId": "run.fixture",
+        "turnId": "turn.fixture",
+        "bindingRevision": 2,
+        "fence": 3
+      },
+      "source": "user",
+      "kind": "steer",
+      "acceptedSequence": 1,
+      "queueRevision": 6,
+      "status": "rejected",
+      "binding": null,
+      "reason": null
+    }
+  ]
+}

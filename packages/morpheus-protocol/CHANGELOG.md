@@ -1,5 +1,9 @@
 # 更新日志
 
+## 0.6.0（未发布）
+
+- 新增 v4 输入控制 profile：owner/fence、command/input identity、queue CAS、消费 request/Effect 绑定、严格编解码和端到端能力声明。旧 profile 不新增字段。
+
 ## 0.5.0
 
 - 新增 `agent-os-interactive.v3` profile：能力发现（implemented/configured/authorized/ready 四维状态）、command binding（proof/epoch/payload digest）、幂等 ack 响应与命令指纹。

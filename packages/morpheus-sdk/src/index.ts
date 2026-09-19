@@ -75,3 +75,4 @@ export type {
   InteractiveProjectionTransition,
   InteractiveTranscriptStreamItem,
 } from "./interactive.js";
+export * from "./interactive-v4.js";

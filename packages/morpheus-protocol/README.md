@@ -1,5 +1,10 @@
 # @xurunxin/morpheus-protocol
 
+0.6.0 候选新增 `agent-os-interactive.v4` 输入控制 profile：严格 owner/fence 与 command/input
+identity、queue CAS、request/Effect 消费证据、端到端能力状态。旧 v1/v2/v3 parser 保持严格。
+使用 `parseAgentOsInteractiveV4Request/Response`、`serializeAgentOsInteractiveV4Request/Response`
+和 `createAgentOsInteractiveV4CommandFingerprint`；发布与 Host 能力状态分别验证。
+
 Morpheus 的版本化 DTO、Schema、严格解析器与编解码包。
 
 ## 能力
