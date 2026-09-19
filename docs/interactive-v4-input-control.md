@@ -3,12 +3,15 @@
 `agent-os-interactive.v4` 是既有 `prompt.steer`、`prompt.follow-up`、`prompt.queue.read/clear`、
 `turn.cancel` 与 `capability.read` 的新版本输入控制 profile。其余命令继续使用已协商 v3，
 transcript 保持 v2；没有新增队列、执行入口或 durable authority。
-Protocol 与 SDK 包准备锁步 0.6.0；发布状态以 registry/SRI 为准，源码和本地 pack 不代表已发布。
+Protocol 与 SDK 0.6.0 已发布到 next；当前候选 0.6.1 增加 owner 发现。发布状态以 registry/SRI 为准，源码和本地 pack 不代表已发布。
 
 ## 身份与消费
 
 每次命令带稳定 requestId/commandId/principal/payloadDigest；输入另带 inputId。
 owner 完整绑定 sessionId、runId、turnId、bindingRevision 和 fence。
+客户端先以 sessionId 调用只读 `prompt.queue.owner.read`，使用 Host 返回的逻辑回合 owner，不能从当前 provider/tool 子阶段推测 root Run 或自行构造 fence。
+响应返回 owner（没有受控回合时为 null）与 sealed；它是瞬时发现结果，不授予写权限，后续命令仍需通过实时身份和封闭检查。
+SDK 要求 `prompt.queue.read` 能力 ready，并校验响应 sessionId；旧 Host 不支持此操作时显式拒绝，不猜测或自动降级。
 同一 commandId 与内容返回原 receipt（replayed=true）；不同内容必须返回 idempotency-conflict。
 连接超时后保留原命令身份，通过 queue.read 找到 commandId/inputId；SDK 不自动发送第二份输入。
 payloadDigest 用 `createAgentOsInteractiveV4CommandFingerprint` 计算，包含 operation、目标、正文、
@@ -30,6 +33,7 @@ Host ingress 标注 source=user/system；客户端命令禁止携带 source。
 clear 必带 expectedRevision，不能撤销 bound。turn.cancel 是独立命令；accepted 只说明
 取消已接收，`cancel-pending-settlement` 表示外部副作用仍待结算。
 seal 后目标明确的 steer 拒绝 target-sealed；owner/fence 过期拒绝 stale-target；不隐式转 follow-up。
+容量耗尽拒绝 queue-full；不得为了接收新输入静默丢弃未决记录。
 显式 retry 的新 Effect 通过既有 lineage 引用原绑定，不改写本输入的首次逻辑消费证据。
 
 ## 快照与 SDK

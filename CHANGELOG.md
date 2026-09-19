@@ -2,6 +2,10 @@
 
 ## 未发布
 
+- Protocol/SDK 锁步准备 0.6.1：新增只读 `prompt.queue.owner.read`，从 Host 获取逻辑回合身份与 fence；严格校验 session 关联，并以 queue.read 能力准入。队列容量拒绝新增 `queue-full` 原因。
+
+## 0.6.0（next）
+
 - Protocol/SDK 锁步准备 0.6.0：新增显式 `agent-os-interactive.v4` 输入控制 profile、消费证据、端到端能力准入与无状态队列 reducer。旧 v1/v2/v3 严格性保持；此源码变化不代表 Host 已支持或包已发布。
 - SDK 的 Node JSONL 传输支持 Interactive v2 与 v3 客户端；修正配置读取和 reconcile 响应的类型提取，供单机 HTTP/SSE 适配服务使用。
 

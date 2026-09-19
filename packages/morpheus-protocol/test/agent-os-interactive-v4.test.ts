@@ -46,6 +46,38 @@ const receipt = {
 };
 
 describe("Harness v4 input contract", () => {
+  test("owner discovery carries Host-issued lineage and rejects cross-session or forged request owners", () => {
+    const read = {
+      schemaVersion,
+      operation: "prompt.queue.owner.read",
+      requestId: "owner1",
+      sessionId: "s1",
+    };
+    expect(parseAgentOsInteractiveV4Request(read)).toEqual(read);
+    expect(() =>
+      parseAgentOsInteractiveV4Request({ ...read, owner }),
+    ).toThrow();
+    expect(
+      parseAgentOsInteractiveV4Response({ ...read, owner, sealed: false }),
+    ).toMatchObject({ owner });
+    expect(
+      parseAgentOsInteractiveV4Response({
+        ...read,
+        owner: null,
+        sealed: false,
+      }),
+    ).toMatchObject({ owner: null });
+    expect(() =>
+      parseAgentOsInteractiveV4Response({
+        ...read,
+        owner: { ...owner, sessionId: "other" },
+        sealed: false,
+      }),
+    ).toThrow();
+    expect(() =>
+      parseAgentOsInteractiveV4Response({ ...read, owner: null, sealed: true }),
+    ).toThrow();
+  });
   test("published JSON fixtures retain exact command identity and all six states", async () => {
     const fixture = (await Bun.file(
       new URL("./fixtures/interactive-v4.json", import.meta.url),

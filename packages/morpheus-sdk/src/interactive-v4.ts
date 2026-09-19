@@ -46,7 +46,11 @@ export function createInteractiveV4AppClient(
         if (
           capabilities.operation !== "capability.read" ||
           !capabilities.capabilities.some(
-            (c) => c.operation === request.operation && c.ready,
+            (c) =>
+              c.operation ===
+                (request.operation === "prompt.queue.owner.read"
+                  ? "prompt.queue.read"
+                  : request.operation) && c.ready,
           )
         )
           throw new TypeError("CAPABILITY_UNAVAILABLE");
@@ -65,6 +69,13 @@ export function createInteractiveV4AppClient(
         response.requestId !== request.requestId
       )
         throw new TypeError("CORRELATION_MISMATCH");
+      if (
+        request.operation === "prompt.queue.owner.read" &&
+        (response.operation !== "prompt.queue.owner.read" ||
+          response.sessionId !== request.sessionId)
+      ) {
+        throw new TypeError("OWNER_MISMATCH");
+      }
       if ("owner" in request) {
         const responseOwner =
           "owner" in response
