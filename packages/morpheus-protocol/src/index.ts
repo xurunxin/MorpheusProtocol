@@ -23,6 +23,8 @@ export * as AgentOsRunTreeBudgetV1 from "./agent-os-run-tree-budget-v1-contract.
 export * from "./agent-os-run-tree-budget-v1-contract.js";
 export * as AgentOsEffectBudgetAdmissionV1 from "./agent-os-effect-budget-admission-v1-contract.js";
 export * from "./agent-os-effect-budget-admission-v1-contract.js";
+export * as AgentOsHostBudgetConsumptionV1 from "./agent-os-host-budget-consumption-v1-contract.js";
+export * from "./agent-os-host-budget-consumption-v1-contract.js";
 export * as AgentOsBackupAdmissionV1 from "./agent-os-backup-admission-v1-contract.js";
 export * from "./agent-os-backup-admission-v1-contract.js";
 export * as AgentOsRestorePreflightV1 from "./agent-os-restore-preflight-v1-contract.js";

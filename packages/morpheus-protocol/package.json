@@ -1,6 +1,6 @@
 {
   "name": "@xurunxin/morpheus-protocol",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "description": "Morpheus 版本化 DTO、Schema、严格解析器与编解码器",
   "type": "module",
   "packageManager": "bun@1.4.0",
