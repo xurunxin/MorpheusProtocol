@@ -10,6 +10,7 @@ export const AGENT_OS_INTERACTIVE_V4_REASONS = [
   "target-sealed",
   "stale-target",
   "stale-revision",
+  "queue-full",
   "already-bound",
   "capability-unavailable",
   "cancel-pending-settlement",
@@ -38,6 +39,10 @@ interface Base {
 }
 export type AgentOsInteractiveV4Request =
   | (Base & { readonly operation: "capability.read" })
+  | (Base & {
+      readonly operation: "prompt.queue.owner.read";
+      readonly sessionId: string;
+    })
   | (Base & {
       readonly operation: "prompt.queue.read";
       readonly owner: InteractiveV4Owner;
@@ -106,6 +111,12 @@ export interface InteractiveV4Capability {
   readonly ready: boolean;
 }
 export type AgentOsInteractiveV4Response =
+  | (Base & {
+      readonly operation: "prompt.queue.owner.read";
+      readonly sessionId: string;
+      readonly owner: InteractiveV4Owner | null;
+      readonly sealed: boolean;
+    })
   | (Base & {
       readonly operation: "capability.read";
       readonly capabilities: readonly InteractiveV4Capability[];
@@ -272,6 +283,7 @@ export function parseAgentOsInteractiveV4Request(
   const b = base(v);
   const operation = oneOf(v.operation, [
     "capability.read",
+    "prompt.queue.owner.read",
     "prompt.queue.read",
     "prompt.steer",
     "prompt.follow-up",
@@ -282,6 +294,10 @@ export function parseAgentOsInteractiveV4Request(
   if (operation === "capability.read") {
     keys(v, common);
     return deepFreeze({ ...b, operation });
+  }
+  if (operation === "prompt.queue.owner.read") {
+    keys(v, [...common, "sessionId"]);
+    return deepFreeze({ ...b, operation, sessionId: id(v.sessionId) });
   }
   if (operation === "prompt.queue.read") {
     keys(v, [...common, "owner"]);
@@ -410,6 +426,24 @@ export function parseAgentOsInteractiveV4Response(
   const v = record(safe(input));
   const b = base(v);
   const common = ["schemaVersion", "requestId", "operation"];
+  if (v.operation === "prompt.queue.owner.read") {
+    keys(v, [...common, "sessionId", "owner", "sealed"]);
+    const sessionId = id(v.sessionId);
+    const currentOwner = v.owner === null ? null : owner(v.owner);
+    const sealed = bool(v.sealed);
+    if (
+      (currentOwner !== null && currentOwner.sessionId !== sessionId) ||
+      (currentOwner === null && sealed)
+    )
+      fail();
+    return deepFreeze({
+      ...b,
+      operation: "prompt.queue.owner.read",
+      sessionId,
+      owner: currentOwner,
+      sealed,
+    });
+  }
   if (v.operation === "capability.read") {
     keys(v, [...common, "capabilities"]);
     if (!Array.isArray(v.capabilities) || v.capabilities.length > 5) fail();

@@ -1,6 +1,10 @@
 # 更新日志
 
-## 0.6.0（未发布）
+## 0.6.1（未发布）
+
+- 新增只读 `prompt.queue.owner.read` 请求与响应；owner 必须属于请求 session，空 owner 不得声明 sealed。增加 `queue-full` 拒绝原因，既有帧形状保持。
+
+## 0.6.0（next）
 
 - 新增 v4 输入控制 profile：owner/fence、command/input identity、queue CAS、消费 request/Effect 绑定、严格编解码和端到端能力声明。旧 profile 不新增字段。
 

@@ -2,6 +2,10 @@
 
 ## 未发布
 
+- 0.6.1 支持通过 `prompt.queue.owner.read` 发现 Host 逻辑回合；要求 queue.read 能力就绪，拒绝跨 session 响应，无自动重试。
+
+## 0.6.0（next）
+
 - 0.6.0 新增 `createInteractiveV4AppClient` 和 `transitionInteractiveV4Queue`；拒绝缺少能力、跨 owner、错误 command receipt 和状态倒退。缺口要求显式 snapshot 重建，无自动重发。
 - Node JSONL 传输与 Interactive v2 类型兼容；配置状态读取及 reconcile 返回明确响应类型。
 

@@ -58,6 +58,46 @@ const capabilities = {
   ],
 };
 
+test("owner discovery requires queue-read capability and rejects another session without retry", async () => {
+  const request = {
+    schemaVersion,
+    operation: "prompt.queue.owner.read",
+    requestId: "owner1",
+    sessionId: "s1",
+  };
+  const readCapability = {
+    ...capabilities,
+    capabilities: capabilities.capabilities.map((c) => ({
+      ...c,
+      operation: "prompt.queue.read" as const,
+    })),
+  };
+  let calls = 0;
+  const client = createInteractiveV4AppClient({
+    request: () => {
+      calls += 1;
+      return { ...request, owner, sealed: false };
+    },
+  });
+  await expect(client.request(request)).rejects.toThrow(
+    "CAPABILITY_UNAVAILABLE",
+  );
+  expect(calls).toBe(0);
+  expect(
+    await client.request(request, { capabilities: readCapability }),
+  ).toMatchObject({ owner });
+  const wrong = createInteractiveV4AppClient({
+    request: () => {
+      calls += 1;
+      return { ...request, sessionId: "other", owner: null, sealed: false };
+    },
+  });
+  await expect(
+    wrong.request(request, { capabilities: readCapability }),
+  ).rejects.toThrow("OWNER_MISMATCH");
+  expect(calls).toBe(2);
+});
+
 test("snapshot rebuild, duplicate idempotence, revision gaps, and owner mismatch", () => {
   expect(transitionInteractiveV4Queue(null, snapshot, owner).kind).toBe(
     "rebuild-required",

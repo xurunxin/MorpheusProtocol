@@ -337,6 +337,8 @@ function writeV3Consumer(consumerDirectory) {
       `const owner = {sessionId:"s",runId:"r",turnId:"t",bindingRevision:1,fence:1};\n` +
       `const request = {schemaVersion:"agent-os-interactive.v4",operation:"prompt.queue.read",requestId:"q",owner};\n` +
       `p4.decodeAgentOsInteractiveV4Request(p4.serializeAgentOsInteractiveV4Request(request));\n` +
+      `p4.parseAgentOsInteractiveV4Request({schemaVersion:"agent-os-interactive.v4",operation:"prompt.queue.owner.read",requestId:"discover",sessionId:"s"});\n` +
+      `p4.parseAgentOsInteractiveV4Response({schemaVersion:"agent-os-interactive.v4",operation:"prompt.queue.owner.read",requestId:"discover",sessionId:"s",owner,sealed:false});\n` +
       `let refused = false; try { parseAgentOsInteractiveV3Request(request); } catch { refused = true; }\n` +
       `if (!refused) throw new Error("v3 accepted v4 input");\n` +
       `const state = s4.transitionInteractiveV4Queue(null,{owner,queueRevision:0,inputs:[]},owner,"snapshot");\n` +
