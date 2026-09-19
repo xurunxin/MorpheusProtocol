@@ -1,5 +1,7 @@
 # MorpheusProtocol
 
+0.6.2 增加纯数据合同 `agent-os-host-budget-consumption/v1`：Control 原子认领已预留子额度后，可返回绑定 Host/store generation、source grant/lease、预算树与本地 scope root、scope/operation 和父 lineage 规则的规范回执。该合同不执行认领、不签发 grant，也不提供 Worker placement；Host 必须向真实 Control current-state port 核验排他归属与未变化的预留，不能把自洽摘要当作权限。
+
 Harness R0 新增 [Interactive v4 输入控制契约](docs/interactive-v4-input-control.md)，
 涵盖消费回执、端到端能力协商与 SDK 队列 reducer。Protocol/SDK 0.6.0 已发布到 next；
 0.6.1 候选增加只读 `prompt.queue.owner.read`，由 Host 返回逻辑回合身份和 fence，客户端不自行猜测。

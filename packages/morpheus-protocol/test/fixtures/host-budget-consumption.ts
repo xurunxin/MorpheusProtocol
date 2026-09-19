@@ -1,0 +1,271 @@
+import {
+  parseAgentOsV1ExecutionGrant,
+  parseAgentOsV1ExecutionInstance,
+  createAgentOsRunTreeBudgetCeilingDigestV1,
+  parseAgentOsRunTreeBudgetCeilingV1,
+  createAgentOsBudgetCurrentStateDigestV1,
+  parseAgentOsBudgetCurrentStateV1,
+  createAgentOsBudgetAttributionKeyV1,
+  createAgentOsBudgetChargeKeyV1,
+  createAgentOsBudgetReservationRequestDigestV1,
+  parseAgentOsBudgetReservationRequestV1,
+  createAgentOsBudgetReservationReceiptDigestV1,
+  parseAgentOsBudgetReservationReceiptV1,
+  createAgentOsHostBudgetGrantDigestV1,
+  createAgentOsHostBudgetConsumptionV1,
+} from "../../src/index.js";
+
+export const proofDigest = (character: string) =>
+  `sha256:${character.repeat(64)}`;
+export const proofNow = "2026-09-20T00:00:00.000Z";
+export const proofEnd = "2026-09-20T01:00:00.000Z";
+export const proofZero = {
+  inputTokens: 0,
+  outputTokens: 0,
+  toolCalls: 0,
+  costUsdMicros: 0,
+};
+
+export function hostBudgetProofFixture() {
+  const grant = parseAgentOsV1ExecutionGrant({
+    grantId: "grant.one",
+    kind: "remote",
+    issuer: "control.one",
+    audience: ["host.one"],
+    authorityDomain: "authority.one",
+    hostId: "host.one",
+    deploymentId: "deployment.one",
+    runId: "run.host-scope",
+    tenantId: "tenant.one",
+    workloadId: "workload.one",
+    attemptId: "attempt.one",
+    instanceId: "instance.one",
+    definitionDigest: proofDigest("1"),
+    policyDigest: proofDigest("2"),
+    capabilityDigest: proofDigest("3"),
+    keyId: "key.one",
+    rotationGeneration: "rotation:one",
+    revocationGeneration: "revocation:one",
+    scope: ["prompt.execute", "tool.execute"],
+    notBefore: proofNow,
+    expiresAt: proofEnd,
+    sessionGrant: {
+      grantId: "session-grant.one",
+      principalId: "principal.one",
+      scope: ["prompt.execute", "tool.execute"],
+      notBefore: proofNow,
+      expiresAt: proofEnd,
+    },
+    leaseBinding: {
+      kind: "remote",
+      leaseId: "lease.one",
+      epoch: "lease-epoch:one",
+      generation: 1,
+      scope: ["prompt.execute", "tool.execute"],
+      notBefore: proofNow,
+      expiresAt: proofEnd,
+    },
+  });
+  const instance = parseAgentOsV1ExecutionInstance({
+    instanceId: grant.instanceId,
+    deploymentId: grant.deploymentId,
+    hostId: grant.hostId,
+    generation: 1,
+    deploymentRevision: "revision.one",
+    replicaOrdinal: 0,
+    observedState: "running",
+  });
+  const ceilingSource = {
+    schemaVersion: "agent-os-run-tree-budget/v1" as const,
+    ceilingId: "ceiling.one",
+    tenantId: grant.tenantId,
+    workloadId: grant.workloadId,
+    rootRunId: "run.budget-root",
+    revision: 0,
+    policyDigest: proofDigest("4"),
+    limit: {
+      inputTokens: 200,
+      outputTokens: 100,
+      toolCalls: 8,
+      costUsdMicros: 0,
+    },
+    hardDimensions: ["input_tokens", "output_tokens", "tool_calls"] as const,
+    createdAt: proofNow,
+  };
+  const ceiling = parseAgentOsRunTreeBudgetCeilingV1({
+    ...ceilingSource,
+    ceilingDigest: createAgentOsRunTreeBudgetCeilingDigestV1(ceilingSource),
+  });
+  const preSource = {
+    schemaVersion: "agent-os-run-tree-budget/v1" as const,
+    ceilingId: ceiling.ceilingId,
+    ceilingDigest: ceiling.ceilingDigest,
+    ceilingRevision: ceiling.revision,
+    ownerReservationId: null,
+    ownerReservationReceiptDigest: null,
+    ownerDisposition: "ceiling" as const,
+    balanceRevision: 0,
+    reservationRevision: 0,
+    reserved: ceiling.limit,
+    available: ceiling.limit,
+    committedTotal: proofZero,
+    releasedTotal: proofZero,
+    refundedTotal: proofZero,
+    commitStates: [],
+    latestSettlementReceiptDigest: null,
+    capturedAt: proofNow,
+  };
+  const preReservationState = parseAgentOsBudgetCurrentStateV1({
+    ...preSource,
+    stateDigest: createAgentOsBudgetCurrentStateDigestV1(preSource),
+  });
+  const subject = {
+    kind: "child" as const,
+    runId: grant.runId,
+    turnId: null,
+    attemptId: null,
+    effectId: null,
+    logicalKey: "child:host" as const,
+    storeGeneration: 7,
+  };
+  const attributionKey = createAgentOsBudgetAttributionKeyV1({
+    ceilingId: ceiling.ceilingId,
+    tenantId: grant.tenantId,
+    workloadId: grant.workloadId,
+    rootRunId: ceiling.rootRunId,
+    parentAttributionKey: null,
+    subject,
+  });
+  const requested = {
+    inputTokens: 100,
+    outputTokens: 50,
+    toolCalls: 4,
+    costUsdMicros: 0,
+  };
+  const requestSource = {
+    schemaVersion: "agent-os-run-tree-budget/v1" as const,
+    operation: "reserve" as const,
+    commandId: "reserve.one",
+    reservationId: "reservation.one",
+    ceilingId: ceiling.ceilingId,
+    ceilingDigest: ceiling.ceilingDigest,
+    expectedCeilingRevision: ceiling.revision,
+    balanceStateDigest: preReservationState.stateDigest,
+    expectedBalanceRevision: 0,
+    parentReservationId: null,
+    parentReservationDigest: null,
+    parentAttributionKey: null,
+    subject,
+    requested,
+    upperBoundEvidenceDigest: proofDigest("5"),
+    effectPermitDigest: null,
+    kernelFenceDigest: proofDigest("6"),
+    attributionKey,
+    chargeKey: createAgentOsBudgetChargeKeyV1({
+      attributionKey,
+      reservationId: "reservation.one",
+      attemptId: null,
+      effectId: null,
+    }),
+    requestedAt: proofNow,
+  };
+  const request = parseAgentOsBudgetReservationRequestV1({
+    ...requestSource,
+    requestDigest: createAgentOsBudgetReservationRequestDigestV1(requestSource),
+  });
+  const receiptSource = {
+    schemaVersion: "agent-os-run-tree-budget/v1" as const,
+    operation: "reserve" as const,
+    receiptId: "receipt.one",
+    commandId: request.commandId,
+    reservationId: request.reservationId,
+    requestDigest: request.requestDigest,
+    disposition: "reserved" as const,
+    denialReason: null,
+    ceilingId: ceiling.ceilingId,
+    ceilingDigest: ceiling.ceilingDigest,
+    ceilingRevision: ceiling.revision,
+    balanceStateDigest: preReservationState.stateDigest,
+    balanceRevision: 1,
+    parentReservationId: null,
+    reservationRevision: 1,
+    reserved: requested,
+    availableBefore: ceiling.limit,
+    availableAfter: requested,
+    attributionKey,
+    chargeKey: request.chargeKey,
+    committedAt: proofNow,
+  };
+  const receipt = parseAgentOsBudgetReservationReceiptV1({
+    ...receiptSource,
+    receiptDigest: createAgentOsBudgetReservationReceiptDigestV1(receiptSource),
+  });
+  const stateSource = {
+    ...preSource,
+    ownerReservationId: receipt.reservationId,
+    ownerReservationReceiptDigest: receipt.receiptDigest,
+    ownerDisposition: "reserved" as const,
+    reservationRevision: 1,
+    reserved: requested,
+    available: requested,
+  };
+  const reservationState = parseAgentOsBudgetCurrentStateV1({
+    ...stateSource,
+    stateDigest: createAgentOsBudgetCurrentStateDigestV1(stateSource),
+  });
+  const consumer = {
+    hostId: grant.hostId,
+    storeId: "store.one",
+    storeGeneration: 2,
+    rootRunId: grant.runId,
+    rootAttemptId: grant.attemptId,
+    definitionDigest: grant.definitionDigest,
+    policyDigest: grant.policyDigest,
+    capabilityDigest: grant.capabilityDigest,
+    placementId: "placement.one",
+    placementRevision: 1,
+  };
+  const bindingInput = {
+    ...consumer,
+    commandId: "consume.one",
+    consumerId: "consumer.one",
+    claimRevision: 1 as const,
+    controlId: grant.issuer,
+    grantId: grant.grantId,
+    grantDigest: createAgentOsHostBudgetGrantDigestV1(grant),
+    reservationId: receipt.reservationId,
+    requestDigest: request.requestDigest,
+    reservationReceiptDigest: receipt.receiptDigest,
+    reservationStateDigest: reservationState.stateDigest,
+    budgetTreeRootRunId: ceiling.rootRunId,
+    instanceId: instance.instanceId,
+    instanceGeneration: instance.generation,
+    leaseId: "lease.one",
+    leaseEpoch: "lease-epoch:one" as const,
+    scope: grant.scope,
+    allowedEffectKinds: [
+      "provider.compact",
+      "provider.llm",
+      "tool.dispatch",
+    ] as const,
+    allowRetry: true,
+    createdAt: proofNow,
+    expiresAt: proofEnd,
+  };
+  return {
+    bindingInput,
+    stateSource,
+    binding: createAgentOsHostBudgetConsumptionV1(bindingInput),
+    grant,
+    instance,
+    ceiling,
+    parent: null,
+    preReservationState,
+    request,
+    receipt,
+    reservationState,
+    admissionKernelFenceDigest: request.kernelFenceDigest,
+    now: proofNow,
+    consumer,
+  };
+}

@@ -1,5 +1,13 @@
 # @xurunxin/morpheus-protocol
 
+0.6.2 新增 `create/parse/serializeAgentOsHostBudgetConsumptionV1`，描述 Control 对已预留 child sub-budget 的排他 Host 消费绑定。`bindingDigest` 只检查完整性；Control 仍须原子认领并保持排他 owner，Host 须核验真实当前 grant、lease、reservation 与本地父执行链。本合同不授权跨 Host 或 Worker 委派。
+
+`createAgentOsHostBudgetGrantDigestV1` 为解析后的 grant 提供统一规范摘要；`assertAgentOsHostBudgetConsumptionRelationshipV1` 验证 grant、运行中 instance、历史预留前状态、预留 receipt 和认领时未消费的 reservation 状态之间的关系。`rootRunId` 是 Host 消费范围根，`budgetTreeRootRunId` 是 Control 预算树根；reservation subject 的 store generation 属于原父 Kernel，不能冒充目标 Host generation。调用方必须提供可信当前 owner、placement、撤销和 fence 证据，不能仅凭传入对象自洽授权。
+
+`claimRevision` 在 v1 固定为 1，不支持续期或重新认领。Control 必须在同一事务中排他认领整个子额度，并阻止该额度继续拆分、结算或释放；过期和 Host 失联不构成安全退款证明。Host 的每次 Effect 在本地 intent 事务中预留，并在外部 I/O 前重新核验当前 Control 归属与 grant/lease。Control 的全局额度保持预留，跨库对账不由本合同实现。
+
+`same-consumption-binding-parent/v1` 要求根执行匹配 grant 的 Run/Attempt、definition/policy/capability 摘要，relationship 将绑定逐项对照可信 Host consumer 根证据；派生执行必须沿真实持久化父 begin 回溯至该根，并保持相同 binding digest、Host/store generation，操作范围只能收窄。缺失父、循环或脱离该消费树的分叉必须拒绝。`allowedEffectKinds` 精确限定 provider、compact 和 tool Effect，`allowRetry` 单独限定显式重试；工具派发仍须具有 `tool.execute` scope，并通过冻结工具定义的原有 capability/approval，绑定不替代工具权限。验证请求按实际 provider Effect 计费。
+
 0.6.0 候选新增 `agent-os-interactive.v4` 输入控制 profile：严格 owner/fence 与 command/input
 identity、queue CAS、request/Effect 消费证据、端到端能力状态。旧 v1/v2/v3 parser 保持严格。
 使用 `parseAgentOsInteractiveV4Request/Response`、`serializeAgentOsInteractiveV4Request/Response`

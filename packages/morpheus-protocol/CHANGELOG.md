@@ -1,5 +1,9 @@
 # 更新日志
 
+## 0.6.2（未发布）
+
+- 新增 `agent-os-host-budget-consumption/v1` 纯消费绑定合同与 canonical SHA-256 codec。区分 budget tree root 和 Host scope root，冻结 source grant、lease、store generation、claim/instance revision、允许操作及父 lineage 规则；严格拒绝未知、漂移和畸形输入，不提供实际认领或授权实现。
+
 ## 0.6.1（未发布）
 
 - 新增只读 `prompt.queue.owner.read` 请求与响应；owner 必须属于请求 session，空 owner 不得声明 sealed。增加 `queue-full` 拒绝原因，既有帧形状保持。

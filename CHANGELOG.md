@@ -2,6 +2,8 @@
 
 ## 未发布
 
+- Protocol/SDK 锁步准备 0.6.2：新增 Host 已预留子预算的排他消费绑定合同，包含独立 budget tree/scope root、store/instance/claim revision、source grant/lease 与允许的本地派生操作。规范编码与严格拒绝身份漂移、未知字段、错误版本、无效时间窗和畸形数组；不引入存储或签发 authority。
+
 - Protocol/SDK 锁步准备 0.6.1：新增只读 `prompt.queue.owner.read`，从 Host 获取逻辑回合身份与 fence；严格校验 session 关联，并以 queue.read 能力准入。队列容量拒绝新增 `queue-full` 原因。
 
 ## 0.6.0（next）
