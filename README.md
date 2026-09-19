@@ -1,5 +1,9 @@
 # MorpheusProtocol
 
+Harness R0 新增 [Interactive v4 输入控制契约](docs/interactive-v4-input-control.md)，
+涵盖消费回执、端到端能力协商与 SDK 队列 reducer。候选 Protocol/SDK 0.6.0 尚未正式发布；
+Host 支持与生产 conformance 由后续 R1 交付，不从 SDK 出口推导 ready。
+
 MorpheusProtocol 提供 Morpheus 的版本化协议、严格 Schema 解析与应用 SDK。仓库公开发布两个锁步版本的 npm 包，根目录只用于开发与发布编排，不作为 npm 包发布。
 
 ## 能力

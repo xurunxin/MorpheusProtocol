@@ -2,6 +2,7 @@
 
 ## 未发布
 
+- 0.6.0 新增 `createInteractiveV4AppClient` 和 `transitionInteractiveV4Queue`；拒绝缺少能力、跨 owner、错误 command receipt 和状态倒退。缺口要求显式 snapshot 重建，无自动重发。
 - Node JSONL 传输与 Interactive v2 类型兼容；配置状态读取及 reconcile 返回明确响应类型。
 
 ## 0.5.0

@@ -40,3 +40,4 @@ export * from "./agent-os-control-v1-admin-contract.js";
 export * from "./tool-policy-types.js";
 export * from "./tool-policy-types.contract.js";
 export * from "./extension-manifest.js";
+export * from "./agent-os-interactive-v4.js";
