@@ -1,5 +1,9 @@
 # 更新日志
 
+## 0.6.6
+
+- 新增私有 Worker Prompt v1 无权限业务契约、严格有界编解码、完整请求／幂等命令摘要、响应绑定和共享 canonical Prompt input 解析器。
+
 ## 0.6.4（未发布）
 
 - H12 正式 snapshot.read wire 契约、规范编码、有界 limit 与严格 ready/unavailable 状态；拒绝 capture/执行字段及操作。

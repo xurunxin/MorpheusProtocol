@@ -1,5 +1,9 @@
 # @xurunxin/morpheus-protocol
 
+0.6.6：新增 `agent-os-worker-prompt/v1` 私有 Worker 业务入口：`prompt.start`（commandId/runId/turnId/attemptId/prompt）、`prompt.read`（runId/cursor/limit）和 `prompt.cancel`（commandId/runId/attemptId/reason）。严格拒绝调用方传入 grant、claim、fence、策略、配置和时间戳；canonical Prompt 响应仍由 Worker 生成。最大帧 1 MiB，read 最多 256 个事件，prompt 复用 32 条 user 消息／64 KiB 解析器，cancel reason 最多 1024 UTF-8 字节。
+
+`createAgentOsWorkerPromptRequestDigestV1` 绑定完整请求，`createAgentOsWorkerPromptCommandDigestV1` 排除 transport requestId，供 Worker 在任何 Control 写入之前持久化幂等命令。相同 commandId 改变业务输入必须拒绝；重试复用原内部请求；cancel 必须从本地持久状态读取当前 claim/fence 并核对 attempt。摘要不是授权，私有通道的所有权检查由组合层负责。JSON 编解码不包含换行；JSONL transport 必须严格 UTF-8、有界缓冲、序列化响应写入，并允许 start 等待期间读取／取消。
+
 0.6.4 新增 `parse/serializeInspectorReadRequestV1` 与 `parse/serializeInspectorReadResponseV1`。唯一 operation 是 `snapshot.read`，limit 为 1–128；ready 响应必须包含合法快照，unavailable 不得附带快照。该契约不授予访问权，由现有 transport 校验本地权限。
 
 0.6.3 的 `create/parse/serializeInspectorEventV1` 与 `parse/serializeInspectorSnapshotV1` 仅传输脱敏 Inspector 数据。Host 必须对所有 reference 使用 epoch 内 HMAC；eventDigest 仅校验内容一致性，不是授权。来源最多 64 项，快照最多 128 个事件；截断须显式标记。token 计数区分 exact/estimated/unobserved，prefix 结构变化不能推断缓存命中，cache 字段须有真实 provider usage。不存在原始捕获字段。

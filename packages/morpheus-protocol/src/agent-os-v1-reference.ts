@@ -515,8 +515,15 @@ export async function dispatchAgentOsV1CanonicalPromptReference(
   return response;
 }
 
-function assertCanonicalPromptResponseCorrelation(
-  request: Readonly<AgentOsV1CanonicalPromptRequest>,
+/** Correlate already-parsed canonical pages with their requested Run and cursor. */
+export function assertCanonicalPromptResponseCorrelation(
+  request: Readonly<
+    | Pick<
+        AgentOsV1CanonicalPromptReadRequest,
+        "operation" | "runId" | "cursor"
+      >
+    | { operation: "prompt.start" | "prompt.cancel"; runId: string }
+  >,
   response: Readonly<AgentOsV1CanonicalPromptResponse>,
 ): void {
   if (response.snapshot.runId !== request.runId)
