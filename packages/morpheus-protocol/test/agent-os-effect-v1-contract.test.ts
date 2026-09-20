@@ -1,5 +1,15 @@
 import { describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
+import {
+  AGENT_OS_WORKER_AUTHORITY_V1,
+  parseAgentOsWorkerAuthorityRequestV1,
+  encodeAgentOsWorkerAuthorityRequestV1,
+  decodeAgentOsWorkerAuthorityRequestV1,
+  encodeAgentOsWorkerAuthorityResponseV1,
+  decodeAgentOsWorkerAuthorityResponseV1,
+  assertAgentOsWorkerAuthorityResponseBindingV1,
+  createAgentOsWorkerAuthorityRequestDigestV1,
+} from "../src/agent-os-worker-authority-v1-contract.js";
 
 import {
   AgentOsV1ContractError,
@@ -402,6 +412,165 @@ function decisionFixture(
     decidedAt: "2026-08-06T00:04:00.000Z",
   };
 }
+
+describe("private Worker Effect authority channel", () => {
+  function permitRequest() {
+    return {
+      schemaVersion: AGENT_OS_WORKER_AUTHORITY_V1,
+      requestId: "rpc.permit",
+      workerId: "host.demo",
+      operation: "effect.permit.issue" as const,
+      payload: {
+        commandId: "command.permit",
+        permitId: "permit.effect-demo",
+        claim: claimFixture(),
+        intent: intentFixture(),
+        request: requestFixture(),
+      },
+    };
+  }
+  function budgetRequest() {
+    const intent = intentFixture();
+    const claim = claimFixture();
+    const permit = permitFixture();
+    return {
+      schemaVersion: AGENT_OS_WORKER_AUTHORITY_V1,
+      requestId: "rpc.budget",
+      workerId: "host.demo",
+      operation: "effect.budget.admit" as const,
+      payload: {
+        commandId: "command.budget",
+        claim,
+        intent,
+        permit,
+        preparation: {
+          effectId: intent.effectId,
+          runId: claim.runId,
+          turnId: intent.authority.turnId,
+          attemptId: claim.attemptId,
+          storeId: claim.storeId,
+          storeGeneration: claim.storeGeneration,
+          claimId: claim.claimId,
+          claimFence: claim.claimFence,
+          logicalKey: intent.logicalKey,
+          preparationDigest: digest("preparation"),
+          kernelFenceDigest: digest("kernel.fence"),
+          intentDigest: createAgentOsEffectIntentDigestV1(intent),
+          permitDigest: permit.permitDigest,
+          preparedAt: "2026-08-06T00:00:12.000Z",
+        },
+      },
+    };
+  }
+  test("round trips candidate permit and committed preparation with bound response", () => {
+    for (const request of [permitRequest(), budgetRequest()]) {
+      expect(
+        decodeAgentOsWorkerAuthorityRequestV1(
+          encodeAgentOsWorkerAuthorityRequestV1(request),
+        ),
+      ).toEqual(request);
+      expect(
+        Object.isFrozen(parseAgentOsWorkerAuthorityRequestV1(request).payload),
+      ).toBe(true);
+    }
+    const request = permitRequest();
+    const response = {
+      schemaVersion: AGENT_OS_WORKER_AUTHORITY_V1,
+      requestId: request.requestId,
+      workerId: request.workerId,
+      requestDigest: createAgentOsWorkerAuthorityRequestDigestV1(request),
+      operation: "effect.permit.issue.receipt",
+      authorityNow: "2026-08-06T00:00:12.000Z",
+      status: "accepted",
+      receipt: permitFixture(),
+    };
+    expect(() =>
+      assertAgentOsWorkerAuthorityResponseBindingV1(
+        request,
+        decodeAgentOsWorkerAuthorityResponseV1(
+          encodeAgentOsWorkerAuthorityResponseV1(response),
+        ),
+      ),
+    ).not.toThrow();
+    const wrongPermit = permitFixture();
+    const { permitDigest: _digest, ...unsigned } = wrongPermit;
+    const changed = { ...unsigned, permitId: "permit.other" };
+    expect(() =>
+      assertAgentOsWorkerAuthorityResponseBindingV1(request, {
+        ...response,
+        receipt: {
+          ...changed,
+          permitDigest: createAgentOsEffectPermitDigestV1(changed),
+        },
+      }),
+    ).toThrow();
+    expect(() =>
+      assertAgentOsWorkerAuthorityResponseBindingV1(
+        { ...request, requestId: "rpc.other" },
+        response,
+      ),
+    ).toThrow();
+  });
+  test("rejects caller budgets, snapshots, approval and mismatched prepared identities", () => {
+    const request = budgetRequest();
+    for (const key of [
+      "requested",
+      "ceiling",
+      "current",
+      "approval",
+      "snapshot",
+      "reservationState",
+    ])
+      expect(() =>
+        parseAgentOsWorkerAuthorityRequestV1({
+          ...request,
+          payload: { ...request.payload, [key]: {} },
+        }),
+      ).toThrow();
+    for (const [key, value] of Object.entries({
+      runId: "run.other",
+      turnId: "turn.other",
+      attemptId: "attempt.other",
+      storeId: "store.other",
+      storeGeneration: 99,
+      claimId: "claim.other",
+      claimFence: 99,
+      effectId: "effect.other",
+      logicalKey: "effect:other",
+      permitDigest: digest("other"),
+      intentDigest: digest("other"),
+      preparedAt: "2026-08-06T00:00:10.000Z",
+    }))
+      expect(() =>
+        parseAgentOsWorkerAuthorityRequestV1({
+          ...request,
+          payload: {
+            ...request.payload,
+            preparation: { ...request.payload.preparation, [key]: value },
+          },
+        }),
+      ).toThrow();
+    expect(() =>
+      parseAgentOsWorkerAuthorityRequestV1({
+        ...request,
+        payload: {
+          ...request.payload,
+          claim: { ...request.payload.claim, claimFence: 99 },
+        },
+      }),
+    ).toThrow();
+    const candidate = permitRequest();
+    expect(() =>
+      parseAgentOsWorkerAuthorityRequestV1({
+        ...candidate,
+        payload: {
+          ...candidate.payload,
+          request: { ...candidate.payload.request, adapterId: "adapter.other" },
+        },
+      }),
+    ).toThrow();
+  });
+});
 
 describe("Agent OS effect/v1 protocol boundary", () => {
   test("strictly canonicalizes, copies and deep-freezes an Effect Intent", () => {
