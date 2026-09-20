@@ -1,5 +1,9 @@
 # 更新日志
 
+## 0.6.7
+
+- 新增任务句柄 v1 严格身份/视图/证据/演进校验，以及 observe、set-delivery、cancel 意图的规范编码、摘要和响应绑定。无存储或 authority 实现。
+
 ## 0.6.6
 
 - 新增私有 Worker Prompt v1 无权限业务契约、严格有界编解码、完整请求／幂等命令摘要、响应绑定和共享 canonical Prompt input 解析器。

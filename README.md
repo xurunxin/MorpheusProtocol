@@ -1,5 +1,9 @@
 # MorpheusProtocol
 
+运行与验证要求 Bun >=1.4.0，直接使用已安装的兼容版本；CI 使用稳定版。不再为测试额外切换到 1.4.0。依赖和类型包仍由 lockfile 精确固定。
+
+0.6.7 增加 [任务句柄契约](docs/task-handle-v1.md)：固定绑定既有 WorkItem、Kernel RunChild 与父子 attempt，分离执行、父任务结算、交付和验收证据。SDK 提供无状态观察、交付模式切换与显式取消意图；Host/Terminal 接入及 H14 端到端验收仍需后续交付。
+
 0.6.5 增加 [Worker 私有授权通道契约](docs/worker-authority-v1.md)：Run 授权、writer fence、Effect permit、预算准入及当前事实快照。仅提供严格 DTO、规范编码和请求关联校验；实际 Control 授权、私有传输、Worker Kernel 检查由后续 production ingress 接入完成。
 
 0.6.4 增加 Inspector 正式 `snapshot.read` 请求/响应及 `createRequestInspectorWireClientV1`，供现有已授权本地 transport 接入；读取上限 1–128，响应校验 requestId 和容量，未启用时返回 unavailable。没有捕获或执行操作。

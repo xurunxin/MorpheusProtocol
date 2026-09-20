@@ -46,3 +46,4 @@ export * from "./agent-os-interactive-v4.js";
 export * from "./request-inspector-v1.js";
 export * from "./agent-os-worker-authority-v1-contract.js";
 export * from "./agent-os-worker-prompt-v1-contract.js";
+export * from "./agent-os-task-handle-v1-contract.js";

@@ -1,6 +1,6 @@
 {
   "name": "@xurunxin/morpheus-protocol-workspace",
-  "version": "0.6.6",
+  "version": "0.6.7",
   "private": true,
   "description": "Morpheus 版本化协议与应用 SDK 开发仓库",
   "type": "module",
@@ -9,9 +9,8 @@
     "type": "git",
     "url": "git+https://github.com/xurunxin/MorpheusProtocol.git"
   },
-  "packageManager": "bun@1.4.0",
   "engines": {
-    "bun": "1.4.0",
+    "bun": ">=1.4.0",
     "node": ">=20"
   },
   "scripts": {
