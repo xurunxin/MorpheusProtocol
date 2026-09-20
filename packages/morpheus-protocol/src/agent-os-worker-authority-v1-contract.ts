@@ -1,5 +1,12 @@
 import { deepFreeze, sha256Hex } from "./contract-primitives.js";
 import {
+  parseAgentOsWorkerBudgetReconciliationInputV1,
+  parseAgentOsWorkerBudgetReconciliationReceiptV1,
+  assertAgentOsWorkerBudgetReconciliationBindingV1,
+  type AgentOsWorkerBudgetReconciliationInputV1,
+  type AgentOsWorkerBudgetReconciliationReceiptV1,
+} from "./agent-os-worker-budget-reconciliation-v1-contract.js";
+import {
   parseAgentOsV1Contract,
   parseAgentOsV1ExecutionGrant,
   parseAgentOsV1ExecutionInstance,
@@ -176,6 +183,10 @@ export interface AgentOsWorkerEffectCurrentAuthorityV1 {
 }
 type EffectRequest =
   | {
+      readonly operation: "effect.budget.reconcile";
+      readonly payload: AgentOsWorkerBudgetReconciliationInputV1;
+    }
+  | {
       readonly operation: "effect.permit.issue";
       readonly payload: AgentOsWorkerEffectPermitInputV1;
     }
@@ -224,6 +235,11 @@ export type AgentOsWorkerAuthorityResponseV1 = Readonly<{
         readonly status: "accepted";
         readonly operation: "effect.permit.issue.receipt";
         readonly receipt: ReturnType<typeof parseAgentOsEffectPermitV1>;
+      }
+    | {
+        readonly status: "accepted";
+        readonly operation: "effect.budget.reconcile.receipt";
+        readonly receipt: AgentOsWorkerBudgetReconciliationReceiptV1;
       }
     | {
         readonly status: "accepted";
@@ -280,6 +296,13 @@ export function parseAgentOsWorkerAuthorityRequestV1(
     requestId: id(value.requestId),
     workerId: id(value.workerId),
   };
+  if (value.operation === "effect.budget.reconcile") {
+    const payload = parseAgentOsWorkerBudgetReconciliationInputV1(
+      value.payload,
+    );
+    if (payload.dispatchReceipt.authority.hostId !== base.workerId) invalid();
+    return deepFreeze({ ...base, operation: value.operation, payload });
+  }
   if (value.operation === "effect.permit.issue")
     return deepFreeze({
       ...base,
@@ -837,6 +860,7 @@ export function parseAgentOsWorkerAuthorityResponseV1(
     operation !== "authority.read.receipt" &&
     operation !== "effect.permit.issue.receipt" &&
     operation !== "effect.budget.admit.receipt" &&
+    operation !== "effect.budget.reconcile.receipt" &&
     operation !== "effect.authority.read.receipt"
   )
     invalid();
@@ -849,6 +873,18 @@ export function parseAgentOsWorkerAuthorityResponseV1(
     authorityNow: instant(value.authorityNow),
   } as const;
   if (value.status === "accepted") {
+    if (operation === "effect.budget.reconcile.receipt") {
+      const receipt = parseAgentOsWorkerBudgetReconciliationReceiptV1(
+        value.receipt,
+      );
+      if (
+        receipt.reservationState.capturedAt > base.authorityNow ||
+        (receipt.settlement !== null &&
+          receipt.settlement.occurredAt > base.authorityNow)
+      )
+        invalid();
+      return deepFreeze({ ...base, operation, status: "accepted", receipt });
+    }
     if (operation === "effect.permit.issue.receipt") {
       const receipt = parseAgentOsEffectPermitV1(value.receipt);
       if (receipt.issuedAt > base.authorityNow) invalid();
@@ -924,6 +960,16 @@ export function assertAgentOsWorkerAuthorityResponseBindingV1(
   )
     invalid();
   if (response.status === "rejected") return;
+  if (request.operation === "effect.budget.reconcile") {
+    if (response.operation !== "effect.budget.reconcile.receipt") invalid();
+    if (request.payload.dispatchReceipt.completedAt > response.authorityNow)
+      invalid();
+    assertAgentOsWorkerBudgetReconciliationBindingV1(
+      request.payload,
+      response.receipt,
+    );
+    return;
+  }
   if (request.operation === "effect.permit.issue") {
     if (response.operation !== "effect.permit.issue.receipt") invalid();
     assertPermitIntent(request.payload.intent, response.receipt);
@@ -994,6 +1040,7 @@ export function assertAgentOsWorkerAuthorityResponseBindingV1(
     response.operation === "authority.read.receipt" ||
     response.operation === "effect.permit.issue.receipt" ||
     response.operation === "effect.budget.admit.receipt" ||
+    response.operation === "effect.budget.reconcile.receipt" ||
     response.operation === "effect.authority.read.receipt"
   )
     invalid();

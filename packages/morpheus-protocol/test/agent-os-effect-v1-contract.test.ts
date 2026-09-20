@@ -1,6 +1,20 @@
 import { describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
 import {
+  hostBudgetProofFixture,
+  proofNow,
+  proofZero,
+} from "./fixtures/host-budget-consumption.js";
+import {
+  createAgentOsWorkerBudgetReconciliationReceiptV1,
+  parseAgentOsWorkerBudgetReconciliationReceiptV1,
+  parseAgentOsWorkerBudgetReconciliationInputV1,
+  assertAgentOsWorkerBudgetReconciliationBindingV1,
+  createAgentOsBudgetSettlementMutationDigestV1,
+  createAgentOsBudgetSettlementReceiptDigestV1,
+  createAgentOsBudgetCurrentStateDigestV1,
+} from "../src/index.js";
+import {
   AGENT_OS_WORKER_AUTHORITY_V1,
   parseAgentOsWorkerAuthorityRequestV1,
   encodeAgentOsWorkerAuthorityRequestV1,
@@ -390,6 +404,223 @@ function receiptFixture(
     receiptDigest: createAgentOsEffectDispatchReceiptDigestV1(unsigned),
   };
 }
+
+// Wire fixtures only: actual Control admission/writer authentication belongs
+// to the Control service tests, not to these structural parsers.
+function reconciliationFixture(
+  disposition: AgentOsEffectDispatchReceiptUnsignedV1["disposition"],
+) {
+  const budget = hostBudgetProofFixture();
+  const dispatchReceipt = receiptFixture(undefined, undefined, disposition);
+  const request = parseAgentOsWorkerBudgetReconciliationInputV1({
+    commandId: "reconcile.one",
+    reservationId: budget.receipt.reservationId,
+    reservationReceiptDigest: budget.receipt.receiptDigest,
+    previousStateDigest: budget.reservationState.stateDigest,
+    expectedReservationRevision: budget.reservationState.reservationRevision,
+    kernelFenceDigest: budget.request.kernelFenceDigest,
+    dispatchReceipt,
+  });
+  const mutation = {
+    schemaVersion: "agent-os-run-tree-budget/v1" as const,
+    operation: "commit" as const,
+    commandId: request.commandId,
+    reservationId: request.reservationId,
+    reservationReceiptDigest: request.reservationReceiptDigest,
+    previousStateDigest: request.previousStateDigest,
+    expectedReservationRevision: request.expectedReservationRevision,
+    amount: budget.receipt.reserved,
+    sourceCommitReceiptDigest: null,
+    usageEvidenceDigest: dispatchReceipt.receiptDigest,
+    correctionEvidenceDigest: null,
+    occurredAt: proofNow,
+  };
+  const settlementSource = {
+    ...mutation,
+    receiptId: "settlement.one",
+    mutationDigest: createAgentOsBudgetSettlementMutationDigestV1(mutation),
+    reservationRevision: 2,
+    committedTotal: mutation.amount,
+    releasedTotal: proofZero,
+    refundedTotal: proofZero,
+    sourceCommitRefundedTotal: null,
+  };
+  const settlement = {
+    ...settlementSource,
+    receiptDigest:
+      createAgentOsBudgetSettlementReceiptDigestV1(settlementSource),
+  };
+  const stateSource = {
+    ...budget.stateSource,
+    ownerDisposition: "closed" as const,
+    reservationRevision: 2,
+    balanceRevision: 1,
+    available: proofZero,
+    committedTotal: mutation.amount,
+    latestSettlementReceiptDigest: settlement.receiptDigest,
+    commitStates: [
+      {
+        commitReceiptDigest: settlement.receiptDigest,
+        usageEvidenceDigest: dispatchReceipt.receiptDigest,
+        committed: mutation.amount,
+        refunded: proofZero,
+      },
+    ],
+  };
+  const receipt = createAgentOsWorkerBudgetReconciliationReceiptV1({
+    schemaVersion: "agent-os-worker-budget-reconciliation/v1",
+    commandId: request.commandId,
+    reservationId: request.reservationId,
+    reservationReceiptDigest: request.reservationReceiptDigest,
+    dispatchReceiptDigest: dispatchReceipt.receiptDigest,
+    previousStateDigest: request.previousStateDigest,
+    previousReservationRevision: request.expectedReservationRevision,
+    policy: "commit-reserved-known-retain-unknown/v1",
+    result:
+      disposition === "unknown" ? "retained_unknown" : "committed_upper_bound",
+    settlement: disposition === "unknown" ? null : settlement,
+    reservationState:
+      disposition === "unknown"
+        ? budget.reservationState
+        : {
+            ...stateSource,
+            stateDigest: createAgentOsBudgetCurrentStateDigestV1(stateSource),
+          },
+  });
+  return { request, receipt };
+}
+
+describe("Worker conservative budget reconciliation wire", () => {
+  test.each(["succeeded", "failed", "unknown"] as const)(
+    "correlates %s without a caller-selected charge or refund",
+    (disposition) => {
+      const { request, receipt } = reconciliationFixture(disposition);
+      expect(() =>
+        assertAgentOsWorkerBudgetReconciliationBindingV1(request, receipt),
+      ).not.toThrow();
+      expect(parseAgentOsWorkerBudgetReconciliationReceiptV1(receipt)).toEqual(
+        receipt,
+      );
+      const wireRequest = parseAgentOsWorkerAuthorityRequestV1({
+        schemaVersion: AGENT_OS_WORKER_AUTHORITY_V1,
+        operation: "effect.budget.reconcile",
+        requestId: "request.reconcile",
+        workerId: request.dispatchReceipt.authority.hostId,
+        payload: request,
+      });
+      const response = {
+        schemaVersion: AGENT_OS_WORKER_AUTHORITY_V1,
+        requestId: wireRequest.requestId,
+        workerId: wireRequest.workerId,
+        operation: "effect.budget.reconcile.receipt",
+        requestDigest: createAgentOsWorkerAuthorityRequestDigestV1(wireRequest),
+        status: "accepted",
+        authorityNow: proofNow,
+        receipt,
+      };
+      expect(
+        decodeAgentOsWorkerAuthorityRequestV1(
+          encodeAgentOsWorkerAuthorityRequestV1(wireRequest),
+        ),
+      ).toEqual(wireRequest);
+      expect(
+        decodeAgentOsWorkerAuthorityResponseV1(
+          encodeAgentOsWorkerAuthorityResponseV1(response),
+        ),
+      ).toEqual(response);
+      expect(() =>
+        assertAgentOsWorkerAuthorityResponseBindingV1(wireRequest, response),
+      ).not.toThrow();
+      expect(receipt.settlement?.amount ?? null).toEqual(
+        disposition === "unknown" ? null : receipt.reservationState.reserved,
+      );
+      expect(receipt.reservationState.refundedTotal).toEqual(proofZero);
+    },
+  );
+
+  test("rejects substituted evidence, stale revisions, refunds, and extra caller-selected amounts", () => {
+    const { request, receipt } = reconciliationFixture("succeeded");
+    const { receiptDigest: _receiptDigest, ...unsignedReceipt } = receipt;
+    for (const patch of [
+      { commandId: "reconcile.other" },
+      { reservationId: "reservation.other" },
+      { previousStateDigest: digest("stale") },
+      { expectedReservationRevision: 2 },
+      { dispatchReceipt: receiptFixture() },
+    ])
+      expect(() =>
+        assertAgentOsWorkerBudgetReconciliationBindingV1(
+          { ...request, ...patch },
+          receipt,
+        ),
+      ).toThrow();
+    expect(() =>
+      parseAgentOsWorkerBudgetReconciliationInputV1({
+        ...request,
+        amount: proofZero,
+      }),
+    ).toThrow();
+    expect(() =>
+      createAgentOsWorkerBudgetReconciliationReceiptV1({
+        ...unsignedReceipt,
+        result: "retained_unknown",
+      }),
+    ).toThrow();
+    expect(() =>
+      parseAgentOsWorkerBudgetReconciliationReceiptV1({
+        ...receipt,
+        receiptDigest: digest("forged"),
+      }),
+    ).toThrow();
+    const unknown = reconciliationFixture("unknown");
+    const { receiptDigest: _unknownDigest, ...unsignedUnknown } =
+      unknown.receipt;
+    expect(() =>
+      createAgentOsWorkerBudgetReconciliationReceiptV1({
+        ...unsignedUnknown,
+        settlement: receipt.settlement,
+      }),
+    ).toThrow();
+    expect(() =>
+      parseAgentOsWorkerAuthorityRequestV1({
+        schemaVersion: AGENT_OS_WORKER_AUTHORITY_V1,
+        operation: "effect.budget.reconcile",
+        requestId: "request.one",
+        workerId: "worker.other",
+        payload: request,
+      }),
+    ).toThrow();
+  });
+
+  test("rejects oversized, non-data and unsupported input without invoking top-level accessors", () => {
+    const { request } = reconciliationFixture("unknown");
+    expect(() =>
+      parseAgentOsWorkerBudgetReconciliationInputV1({
+        ...request,
+        commandId: "x".repeat(1_048_577),
+      }),
+    ).toThrow();
+    let accessed = false;
+    const accessor = { ...request };
+    Object.defineProperty(accessor, "commandId", {
+      enumerable: true,
+      get() {
+        accessed = true;
+        return "reconcile.one";
+      },
+    });
+    expect(() =>
+      parseAgentOsWorkerBudgetReconciliationInputV1(accessor),
+    ).toThrow();
+    expect(accessed).toBe(false);
+    expect(() =>
+      parseAgentOsWorkerBudgetReconciliationInputV1({
+        ...request,
+        expectedReservationRevision: 0,
+      }),
+    ).toThrow();
+  });
+});
 
 function decisionFixture(
   intent = intentFixture(),

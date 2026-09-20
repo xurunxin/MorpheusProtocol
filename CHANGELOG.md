@@ -2,6 +2,8 @@
 
 ## 未发布
 
+- 0.6.8：Worker 私有 authority 增加 Effect 预算保守对账契约。已知结果按预留上限提交，unknown 保留未决额度；不接受调用方指定金额、释放或退款。严格关联 Effect receipt、预算 CAS、结算及当前状态；实际 Control/Worker 接入和 H15/G4 验收仍未完成。
+
 - 0.6.7：任务句柄 v1 身份、状态视图、追加式制品/检查/结算证据、规范 wire 与 SDK。终态允许审计 revision 增长但不能翻转执行结果；中断观察不产生取消。
 
 - 0.6.5：增加 `agent-os-worker-authority/v1` 私有监督进程通道契约。绑定请求摘要、worker/Run/claim/Effect 身份与预算复合回执，拒绝调用方注入预算、approval 或 current snapshot；保留账本变更时间与当前读取时间的区别。Protocol/SDK 锁步；不代表生产 Worker ingress、H14/H15 或 G4 已完成。
