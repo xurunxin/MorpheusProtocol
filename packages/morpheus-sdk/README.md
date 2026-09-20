@@ -1,5 +1,7 @@
 # @xurunxin/morpheus-sdk
 
+0.6.4：`createRequestInspectorWireClientV1({ request }).read(request, signal)` 对接已有本地 transport，先验证只读请求，再验证响应身份、ready/unavailable 与事件数量。不建立连接、不自动重试、不管理执行或捕获权限。
+
 H12（0.6.3）：`createRequestInspectorClientV1({ snapshot })` 使用调用方提供的已授权只读 transport，验证返回快照。`reduceInspectorEventV1(previous, event)` 是纯函数，返回 applied、duplicate 或 snapshot-required；epoch 改变、cursor 缺口、摘要冲突、过期重复及同请求来源 revision 倒退均要求重新读取快照。历史最多保留 128 项。取消读取不取消执行，没有重试、执行或开启原始捕获接口。
 
 0.6.0 候选新增 `createInteractiveV4AppClient` 与 `transitionInteractiveV4Queue`。

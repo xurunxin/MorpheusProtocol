@@ -74,6 +74,82 @@ export interface InspectorSnapshotV1 {
   readonly events: readonly InspectorEventV1[];
 }
 
+export interface InspectorReadRequestV1 {
+  readonly schemaVersion: typeof REQUEST_INSPECTOR_SCHEMA_V1;
+  readonly operation: "snapshot.read";
+  readonly requestId: string;
+  readonly limit: number;
+}
+export interface InspectorReadResponseV1 {
+  readonly schemaVersion: typeof REQUEST_INSPECTOR_SCHEMA_V1;
+  readonly operation: "snapshot.read";
+  readonly requestId: string;
+  readonly ready: boolean;
+  readonly reasonCode: "unavailable" | null;
+  readonly snapshot: InspectorSnapshotV1 | null;
+}
+export function parseInspectorReadRequestV1(
+  input: unknown,
+): Readonly<InspectorReadRequestV1> {
+  const v = record(input, ["schemaVersion", "operation", "requestId", "limit"]);
+  if (
+    v.schemaVersion !== REQUEST_INSPECTOR_SCHEMA_V1 ||
+    v.operation !== "snapshot.read" ||
+    count(v.limit) < 1 ||
+    count(v.limit) > 128
+  )
+    fail();
+  return deepFreeze({
+    schemaVersion: REQUEST_INSPECTOR_SCHEMA_V1,
+    operation: "snapshot.read",
+    requestId: correlationId(v.requestId),
+    limit: count(v.limit),
+  });
+}
+export function parseInspectorReadResponseV1(
+  input: unknown,
+): Readonly<InspectorReadResponseV1> {
+  const v = record(input, [
+    "schemaVersion",
+    "operation",
+    "requestId",
+    "ready",
+    "reasonCode",
+    "snapshot",
+  ]);
+  if (
+    v.schemaVersion !== REQUEST_INSPECTOR_SCHEMA_V1 ||
+    v.operation !== "snapshot.read"
+  )
+    fail();
+  const ready = boolean(v.ready);
+  if (
+    ready
+      ? v.reasonCode !== null || v.snapshot === null
+      : v.reasonCode !== "unavailable" || v.snapshot !== null
+  )
+    fail();
+  return deepFreeze({
+    schemaVersion: REQUEST_INSPECTOR_SCHEMA_V1,
+    operation: "snapshot.read",
+    requestId: correlationId(v.requestId),
+    ready,
+    reasonCode: ready ? null : "unavailable",
+    snapshot: ready ? parseInspectorSnapshotV1(v.snapshot) : null,
+  });
+}
+export function serializeInspectorReadRequestV1(input: unknown): string {
+  return JSON.stringify(parseInspectorReadRequestV1(input));
+}
+export function serializeInspectorReadResponseV1(input: unknown): string {
+  return JSON.stringify(parseInspectorReadResponseV1(input));
+}
+function correlationId(input: unknown): string {
+  if (typeof input !== "string" || !/^[a-zA-Z0-9_.:-]{1,128}$/.test(input))
+    fail();
+  return input;
+}
+
 export function parseInspectorRequestV1(
   input: unknown,
 ): Readonly<InspectorRequestV1> {

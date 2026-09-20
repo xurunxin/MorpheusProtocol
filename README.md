@@ -1,5 +1,7 @@
 # MorpheusProtocol
 
+0.6.4 增加 Inspector 正式 `snapshot.read` 请求/响应及 `createRequestInspectorWireClientV1`，供现有已授权本地 transport 接入；读取上限 1–128，响应校验 requestId 和容量，未启用时返回 unavailable。没有捕获或执行操作。
+
 0.6.3 增加 H12 只读 `agent-os-request-inspector/v1`：脱敏请求投影、严格解析和规范编码，以及有界 SDK reducer。标识必须是 Host 用 epoch 内密钥生成的 HMAC，不接受原始 prompt、路径、凭据、工具正文或自由文本原因。协议出口不表示 Host/Terminal 已支持；端到端能力与 O05/O06/O08 验收由 H12 后续接入交付。
 
 0.6.2 增加纯数据合同 `agent-os-host-budget-consumption/v1`：Control 原子认领已预留子额度后，可返回绑定 Host/store generation、source grant/lease、预算树与本地 scope root、scope/operation 和父 lineage 规则的规范回执。该合同不执行认领、不签发 grant，也不提供 Worker placement；Host 必须向真实 Control current-state port 核验排他归属与未变化的预留，不能把自洽摘要当作权限。

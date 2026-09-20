@@ -1,8 +1,40 @@
 import {
   parseInspectorEventV1,
   parseInspectorSnapshotV1,
+  parseInspectorReadRequestV1,
+  parseInspectorReadResponseV1,
+  type InspectorReadRequestV1,
   type InspectorSnapshotV1,
 } from "@xurunxin/morpheus-protocol";
+
+/** 仅 snapshot.read；认证由现有本地 transport 提供，不授予 capture 或执行权限。 */
+export function createRequestInspectorWireClientV1(
+  transport: Readonly<{
+    request: (
+      request: InspectorReadRequestV1,
+      signal?: AbortSignal,
+    ) => Promise<unknown> | unknown;
+  }>,
+) {
+  if (typeof transport.request !== "function")
+    throw new TypeError("INSPECTOR_TRANSPORT_REQUIRED");
+  return Object.freeze({
+    read: async (input: unknown, signal?: AbortSignal) => {
+      const request = parseInspectorReadRequestV1(input);
+      if (signal?.aborted) throw new Error("INSPECTOR_READ_ABORTED");
+      const response = parseInspectorReadResponseV1(
+        await transport.request(request, signal),
+      );
+      if (signal?.aborted) throw new Error("INSPECTOR_READ_ABORTED");
+      if (
+        response.requestId !== request.requestId ||
+        (response.snapshot?.events.length ?? 0) > request.limit
+      )
+        throw new Error("INSPECTOR_RESPONSE_MISMATCH");
+      return response;
+    },
+  });
+}
 
 export type InspectorTransitionV1 =
   | Readonly<{

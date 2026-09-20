@@ -1,5 +1,7 @@
 # @xurunxin/morpheus-protocol
 
+0.6.4 新增 `parse/serializeInspectorReadRequestV1` 与 `parse/serializeInspectorReadResponseV1`。唯一 operation 是 `snapshot.read`，limit 为 1–128；ready 响应必须包含合法快照，unavailable 不得附带快照。该契约不授予访问权，由现有 transport 校验本地权限。
+
 0.6.3 的 `create/parse/serializeInspectorEventV1` 与 `parse/serializeInspectorSnapshotV1` 仅传输脱敏 Inspector 数据。Host 必须对所有 reference 使用 epoch 内 HMAC；eventDigest 仅校验内容一致性，不是授权。来源最多 64 项，快照最多 128 个事件；截断须显式标记。token 计数区分 exact/estimated/unobserved，prefix 结构变化不能推断缓存命中，cache 字段须有真实 provider usage。不存在原始捕获字段。
 
 快照必须是连续事件后缀，`dropped + events.length === sequence`；dropped 只记录已淘汰前缀，不表示观察器回调丢弃。同一 requestSnapshotId 的 sourceRevision 在保留窗口内不得倒退；不承诺已淘汰身份的全局单调性，过期重复必须重新读取快照。

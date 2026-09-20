@@ -2,6 +2,8 @@
 
 ## 未发布
 
+- 0.6.4：精确依赖 Protocol 0.6.4，增加正式 Inspector wire client，拒绝关联漂移、超出请求容量和取消后结果。
+
 - 0.6.3：精确依赖 Protocol 0.6.3，增加 Inspector 纯 reducer 与只读快照客户端；gap/conflict/reconnect 均保留不确定性，不猜测模型理解、缓存命中或任务完成。
 
 - 0.6.2 与 Protocol 锁步；精确依赖新增 Host budget consumption 合同的 Protocol 0.6.2，无新的有状态 SDK 行为。
