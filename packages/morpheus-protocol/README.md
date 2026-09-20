@@ -1,5 +1,9 @@
 # @xurunxin/morpheus-protocol
 
+0.6.3 的 `create/parse/serializeInspectorEventV1` 与 `parse/serializeInspectorSnapshotV1` 仅传输脱敏 Inspector 数据。Host 必须对所有 reference 使用 epoch 内 HMAC；eventDigest 仅校验内容一致性，不是授权。来源最多 64 项，快照最多 128 个事件；截断须显式标记。token 计数区分 exact/estimated/unobserved，prefix 结构变化不能推断缓存命中，cache 字段须有真实 provider usage。不存在原始捕获字段。
+
+快照必须是连续事件后缀，`dropped + events.length === sequence`；dropped 只记录已淘汰前缀，不表示观察器回调丢弃。同一 requestSnapshotId 的 sourceRevision 在保留窗口内不得倒退；不承诺已淘汰身份的全局单调性，过期重复必须重新读取快照。
+
 0.6.2 新增 `create/parse/serializeAgentOsHostBudgetConsumptionV1`，描述 Control 对已预留 child sub-budget 的排他 Host 消费绑定。`bindingDigest` 只检查完整性；Control 仍须原子认领并保持排他 owner，Host 须核验真实当前 grant、lease、reservation 与本地父执行链。本合同不授权跨 Host 或 Worker 委派。
 
 `createAgentOsHostBudgetGrantDigestV1` 为解析后的 grant 提供统一规范摘要；`assertAgentOsHostBudgetConsumptionRelationshipV1` 验证 grant、运行中 instance、历史预留前状态、预留 receipt 和认领时未消费的 reservation 状态之间的关系。`rootRunId` 是 Host 消费范围根，`budgetTreeRootRunId` 是 Control 预算树根；reservation subject 的 store generation 属于原父 Kernel，不能冒充目标 Host generation。调用方必须提供可信当前 owner、placement、撤销和 fence 证据，不能仅凭传入对象自洽授权。

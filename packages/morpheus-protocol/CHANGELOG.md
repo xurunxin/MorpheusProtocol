@@ -1,5 +1,9 @@
 # 更新日志
 
+## 0.6.3（未发布）
+
+- H12 只读脱敏 Inspector 契约，严格有限字段、规范编码、事件摘要及容量限制；不引入采集、存储、授权或执行逻辑。
+
 ## 0.6.2（未发布）
 
 - 新增 `agent-os-host-budget-consumption/v1` 纯消费绑定合同与 canonical SHA-256 codec。区分 budget tree root 和 Host scope root，冻结 source grant、lease、store generation、claim/instance revision、允许操作及父 lineage 规则；严格拒绝未知、漂移和畸形输入，不提供实际认领或授权实现。

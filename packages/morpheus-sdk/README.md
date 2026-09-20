@@ -1,5 +1,7 @@
 # @xurunxin/morpheus-sdk
 
+H12（0.6.3）：`createRequestInspectorClientV1({ snapshot })` 使用调用方提供的已授权只读 transport，验证返回快照。`reduceInspectorEventV1(previous, event)` 是纯函数，返回 applied、duplicate 或 snapshot-required；epoch 改变、cursor 缺口、摘要冲突、过期重复及同请求来源 revision 倒退均要求重新读取快照。历史最多保留 128 项。取消读取不取消执行，没有重试、执行或开启原始捕获接口。
+
 0.6.0 候选新增 `createInteractiveV4AppClient` 与 `transitionInteractiveV4Queue`。
 命令先读取同一可信连接的 capabilities，显式传入 `{ capabilities, signal }`；不支持的操作
 fail closed。Reducer 对 gap/conflict/倒退要求 snapshot 重建，连接恢复不会自动重发 prompt。

@@ -76,3 +76,4 @@ export type {
   InteractiveTranscriptStreamItem,
 } from "./interactive.js";
 export * from "./interactive-v4.js";
+export * from "./request-inspector-v1.js";
