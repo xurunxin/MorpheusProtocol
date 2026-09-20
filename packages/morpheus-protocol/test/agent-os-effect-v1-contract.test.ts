@@ -473,6 +473,7 @@ function reconciliationFixture(
     reservationId: request.reservationId,
     reservationReceiptDigest: request.reservationReceiptDigest,
     dispatchReceiptDigest: dispatchReceipt.receiptDigest,
+    kernelFenceDigest: request.kernelFenceDigest,
     previousStateDigest: request.previousStateDigest,
     previousReservationRevision: request.expectedReservationRevision,
     policy: "commit-reserved-known-retain-unknown/v1",
@@ -545,6 +546,7 @@ describe("Worker conservative budget reconciliation wire", () => {
       { commandId: "reconcile.other" },
       { reservationId: "reservation.other" },
       { previousStateDigest: digest("stale") },
+      { kernelFenceDigest: digest("foreign-fence") },
       { expectedReservationRevision: 2 },
       { dispatchReceipt: receiptFixture() },
     ])

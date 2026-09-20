@@ -25,6 +25,7 @@ export interface AgentOsWorkerBudgetReconciliationReceiptV1 {
   readonly reservationId: string;
   readonly reservationReceiptDigest: string;
   readonly dispatchReceiptDigest: string;
+  readonly kernelFenceDigest: string;
   readonly previousStateDigest: string;
   readonly previousReservationRevision: number;
   readonly policy: "commit-reserved-known-retain-unknown/v1";
@@ -44,6 +45,7 @@ const keys = [
   "reservationId",
   "reservationReceiptDigest",
   "dispatchReceiptDigest",
+  "kernelFenceDigest",
   "previousStateDigest",
   "previousReservationRevision",
   "policy",
@@ -172,6 +174,7 @@ function unsigned(
     reservationId,
     reservationReceiptDigest,
     dispatchReceiptDigest,
+    kernelFenceDigest: digest(value.kernelFenceDigest),
     previousStateDigest,
     previousReservationRevision,
     policy: "commit-reserved-known-retain-unknown/v1",
@@ -210,6 +213,7 @@ export function assertAgentOsWorkerBudgetReconciliationBindingV1(
     "reservationId",
     "reservationReceiptDigest",
     "previousStateDigest",
+    "kernelFenceDigest",
   ] as const)
     if (request[key] !== receipt[key]) invalid();
   if (
