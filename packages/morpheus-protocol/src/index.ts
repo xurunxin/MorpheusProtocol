@@ -43,3 +43,4 @@ export * from "./tool-policy-types.js";
 export * from "./tool-policy-types.contract.js";
 export * from "./extension-manifest.js";
 export * from "./agent-os-interactive-v4.js";
+export * from "./request-inspector-v1.js";

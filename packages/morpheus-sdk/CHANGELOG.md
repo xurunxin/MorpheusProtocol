@@ -2,6 +2,8 @@
 
 ## 未发布
 
+- 0.6.3：精确依赖 Protocol 0.6.3，增加 Inspector 纯 reducer 与只读快照客户端；gap/conflict/reconnect 均保留不确定性，不猜测模型理解、缓存命中或任务完成。
+
 - 0.6.2 与 Protocol 锁步；精确依赖新增 Host budget consumption 合同的 Protocol 0.6.2，无新的有状态 SDK 行为。
 
 - 0.6.1 支持通过 `prompt.queue.owner.read` 发现 Host 逻辑回合；要求 queue.read 能力就绪，拒绝跨 session 响应，无自动重试。
