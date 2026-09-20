@@ -1,5 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
+import {
+  AGENT_OS_WORKER_AUTHORITY_V1,
+  assertAgentOsWorkerAuthorityResponseBindingV1,
+  createAgentOsWorkerAuthorityRequestDigestV1,
+  encodeAgentOsWorkerAuthorityResponseV1,
+  parseAgentOsWorkerAuthorityRequestV1,
+  parseAgentOsWorkerAuthorityResponseV1,
+} from "../src/agent-os-worker-authority-v1-contract.js";
 
 import {
   AGENT_OS_V1_CONTRACT_SCHEMA,
@@ -205,6 +213,114 @@ function fixture(
     },
   };
 }
+
+test("managed Worker run authorization roundtrips a validated contract without canonicalSource", () => {
+  const contract = fixture();
+  const request = {
+    schemaVersion: AGENT_OS_WORKER_AUTHORITY_V1,
+    requestId: "request.run",
+    workerId: "host.demo",
+    operation: "run.authorize",
+    payload: {
+      commandId: "command.run",
+      runId: "run.demo",
+      turnId: "turn.demo",
+      attemptId: "attempt.demo",
+    },
+  };
+  const response = {
+    schemaVersion: AGENT_OS_WORKER_AUTHORITY_V1,
+    requestId: request.requestId,
+    workerId: request.workerId,
+    operation: "run.authorize.receipt",
+    requestDigest: createAgentOsWorkerAuthorityRequestDigestV1(request),
+    authorityNow: "2026-08-05T00:00:01.000Z",
+    status: "accepted",
+    receipt: {
+      ownerRevision: 1,
+      ownerDigest: digest("owner"),
+      turnId: "turn.demo",
+      contract,
+      duplicate: false,
+    },
+  };
+  const encoded = encodeAgentOsWorkerAuthorityResponseV1(response);
+  expect(encoded).not.toContain("canonicalSource");
+  expect(() =>
+    assertAgentOsWorkerAuthorityResponseBindingV1(request, JSON.parse(encoded)),
+  ).not.toThrow();
+  expect(encodeAgentOsWorkerAuthorityResponseV1(JSON.parse(encoded))).toBe(
+    encoded,
+  );
+  expect(() =>
+    parseAgentOsWorkerAuthorityRequestV1({
+      ...request,
+      payload: { ...request.payload, scope: ["workspace.write"] },
+    }),
+  ).toThrow();
+  expect(() =>
+    assertAgentOsWorkerAuthorityResponseBindingV1(request, {
+      ...response,
+      receipt: { ...response.receipt, turnId: "other.turn" },
+    }),
+  ).toThrow();
+});
+
+test("managed Worker authority snapshot binds identity and one capture time but preserves revoked facts", () => {
+  const contract = fixture();
+  const request = {
+    schemaVersion: AGENT_OS_WORKER_AUTHORITY_V1,
+    requestId: "request.read",
+    workerId: "host.demo",
+    operation: "authority.read",
+    payload: { runId: "run.demo", grantId: "grant.demo" },
+  };
+  const authorityNow = "2026-08-05T00:00:01.000Z";
+  const response = {
+    schemaVersion: AGENT_OS_WORKER_AUTHORITY_V1,
+    requestId: request.requestId,
+    workerId: request.workerId,
+    operation: "authority.read.receipt",
+    requestDigest: createAgentOsWorkerAuthorityRequestDigestV1(request),
+    authorityNow,
+    status: "accepted",
+    receipt: {
+      ownerRevision: 1,
+      ownerDigest: digest("owner"),
+      authorityNow,
+      keyId: "grant-key.demo",
+      rotationGeneration: "rotation:key-current",
+      revocationGeneration: "revocation:key-current",
+      grant: contract.executionGrant,
+      grantStatus: "revoked",
+      instance: contract.executionInstance,
+      writer: null,
+    },
+  };
+  expect(() =>
+    assertAgentOsWorkerAuthorityResponseBindingV1(request, response),
+  ).not.toThrow();
+  expect(
+    encodeAgentOsWorkerAuthorityResponseV1(
+      JSON.parse(encodeAgentOsWorkerAuthorityResponseV1(response)),
+    ),
+  ).toBe(encodeAgentOsWorkerAuthorityResponseV1(response));
+  expect(() =>
+    parseAgentOsWorkerAuthorityResponseV1({
+      ...response,
+      receipt: {
+        ...response.receipt,
+        authorityNow: "2026-08-05T00:00:02.000Z",
+      },
+    }),
+  ).toThrow();
+  expect(() =>
+    parseAgentOsWorkerAuthorityResponseV1({
+      ...response,
+      receipt: { ...response.receipt, current: true },
+    }),
+  ).toThrow();
+});
 
 function copy(value: AgentOsV1Contract): Record<string, unknown> {
   return JSON.parse(JSON.stringify(value)) as Record<string, unknown>;

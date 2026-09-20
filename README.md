@@ -1,5 +1,7 @@
 # MorpheusProtocol
 
+0.6.5 增加 [Worker 私有授权通道契约](docs/worker-authority-v1.md)：Run 授权、writer fence、Effect permit、预算准入及当前事实快照。仅提供严格 DTO、规范编码和请求关联校验；实际 Control 授权、私有传输、Worker Kernel 检查由后续 production ingress 接入完成。
+
 0.6.4 增加 Inspector 正式 `snapshot.read` 请求/响应及 `createRequestInspectorWireClientV1`，供现有已授权本地 transport 接入；读取上限 1–128，响应校验 requestId 和容量，未启用时返回 unavailable。没有捕获或执行操作。
 
 0.6.3 增加 H12 只读 `agent-os-request-inspector/v1`：脱敏请求投影、严格解析和规范编码，以及有界 SDK reducer。标识必须是 Host 用 epoch 内密钥生成的 HMAC，不接受原始 prompt、路径、凭据、工具正文或自由文本原因。协议出口不表示 Host/Terminal 已支持；端到端能力与 O05/O06/O08 验收由 H12 后续接入交付。

@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
+import { createAgentOsEffectBudgetAdmissionApplicationV1 } from "../src/agent-os-effect-budget-admission-v1-contract.js";
+import {
+  AGENT_OS_WORKER_AUTHORITY_V1,
+  parseAgentOsWorkerEffectBudgetReceiptV1,
+  parseAgentOsWorkerAuthorityResponseV1,
+} from "../src/agent-os-worker-authority-v1-contract.js";
 
 import {
   AgentOsV1ContractError,
@@ -372,6 +378,108 @@ function attributionFixture(
     receiptDigest: createAgentOsResourceAttributionReceiptDigestV1(unsigned),
   });
 }
+
+describe("Worker budget admission wire", () => {
+  function bundle(
+    request = requestFixture(),
+    receipt = reservationFixture(request),
+  ) {
+    return {
+      request,
+      receipt,
+      application: createAgentOsEffectBudgetAdmissionApplicationV1({
+        commandId: request.commandId,
+        effectId: request.subject.effectId!,
+        reservationId: request.reservationId,
+        requestDigest: request.requestDigest,
+        reservationReceiptDigest: receipt.receiptDigest,
+        effectPermitDigest: request.effectPermitDigest!,
+        kernelFenceDigest: request.kernelFenceDigest,
+      }),
+      kernelFenceDigest: request.kernelFenceDigest,
+      reservationState: currentStateFixture(ceilingFixture(), receipt, {
+        capturedAt: "2026-08-07T00:00:03.000Z",
+      }),
+    };
+  }
+  test("accepts one internally bound reservation and rejects mixed application or state", () => {
+    const value = bundle();
+    expect(parseAgentOsWorkerEffectBudgetReceiptV1(value)).toEqual(value);
+    const otherRequest = requestFixture(ceilingFixture(), {
+      reservationId: "reservation.other",
+      commandId: "command.other",
+    });
+    const other = bundle(otherRequest);
+    for (const key of [
+      "request",
+      "receipt",
+      "application",
+      "reservationState",
+    ] as const)
+      expect(() =>
+        parseAgentOsWorkerEffectBudgetReceiptV1({
+          ...value,
+          [key]: other[key],
+        }),
+      ).toThrow();
+    expect(() =>
+      parseAgentOsWorkerEffectBudgetReceiptV1({
+        ...value,
+        kernelFenceDigest: digest("other"),
+      }),
+    ).toThrow();
+    expect(() =>
+      parseAgentOsWorkerEffectBudgetReceiptV1({ ...value, current: true }),
+    ).toThrow();
+  });
+  test("fresh authority capture preserves an older durable budget state time and digest", () => {
+    const receipt = bundle();
+    const response = {
+      schemaVersion: AGENT_OS_WORKER_AUTHORITY_V1,
+      requestId: "rpc.budget",
+      workerId: "worker.one",
+      requestDigest: digest("request"),
+      operation: "effect.budget.admit.receipt",
+      status: "accepted",
+      authorityNow: "2026-08-07T00:00:05.000Z",
+      receipt,
+    };
+    expect(parseAgentOsWorkerAuthorityResponseV1(response)).toEqual(response);
+    expect(() =>
+      parseAgentOsWorkerAuthorityResponseV1({
+        ...response,
+        authorityNow: "2026-08-07T00:00:02.000Z",
+      }),
+    ).toThrow();
+  });
+  test("rejects self-consistent receipt digests with wrong request metadata or timing", () => {
+    const request = requestFixture();
+    for (const override of [
+      { ceilingId: "ceiling.other" },
+      { ceilingDigest: digest("other") },
+      { attributionKey: digest("other") },
+      { chargeKey: digest("other") },
+      { balanceStateDigest: digest("other") },
+      { balanceRevision: 9 },
+      { committedAt: "2026-08-07T00:00:00.000Z" },
+    ])
+      expect(() =>
+        parseAgentOsWorkerEffectBudgetReceiptV1(
+          bundle(
+            request,
+            reservationFixture(request, currentStateFixture(), override),
+          ),
+        ),
+      ).toThrow();
+    const value = bundle();
+    expect(() =>
+      parseAgentOsWorkerEffectBudgetReceiptV1({
+        ...value,
+        reservationState: currentStateFixture(ceilingFixture(), value.receipt),
+      }),
+    ).toThrow();
+  });
+});
 
 describe("agent-os-run-tree-budget/v1", () => {
   test("exports strict canonical root, reservation, settlement and attribution contracts", () => {
