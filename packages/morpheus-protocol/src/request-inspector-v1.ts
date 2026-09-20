@@ -69,6 +69,7 @@ export interface InspectorSnapshotV1 {
   readonly schemaVersion: typeof REQUEST_INSPECTOR_SCHEMA_V1;
   readonly epoch: InspectorOpaqueIdV1;
   readonly sequence: number;
+  /** 已不在该快照中的连续事件前缀长度；观察器丢弃计数不混入此字段。 */
   readonly dropped: number;
   readonly events: readonly InspectorEventV1[];
 }
@@ -220,22 +221,28 @@ export function parseInspectorSnapshotV1(
   if (v.schemaVersion !== REQUEST_INSPECTOR_SCHEMA_V1) fail();
   const epoch = opaque(v.epoch);
   const sequence = count(v.sequence);
+  const dropped = count(v.dropped);
   const events = array(v.events, 128).map(parseInspectorEventV1);
-  let previous = 0;
+  if (dropped + events.length !== sequence) fail();
+  let previous = dropped;
+  const revisions = new Map<InspectorOpaqueIdV1, number>();
   for (const event of events) {
     if (
       event.epoch !== epoch ||
-      event.sequence <= previous ||
+      event.sequence !== previous + 1 ||
       event.sequence > sequence
     )
       fail();
+    const revision = revisions.get(event.request.requestSnapshotId);
+    if (revision !== undefined && event.sourceRevision < revision) fail();
+    revisions.set(event.request.requestSnapshotId, event.sourceRevision);
     previous = event.sequence;
   }
   return deepFreeze({
     schemaVersion: REQUEST_INSPECTOR_SCHEMA_V1,
     epoch,
     sequence,
-    dropped: count(v.dropped),
+    dropped,
     events,
   });
 }

@@ -117,9 +117,31 @@ test("Inspector snapshot 限制容量并拒绝跨 epoch、乱序或越界事件"
     events: [event],
   };
   expect(parseInspectorSnapshotV1(snapshot).events).toHaveLength(1);
+  expect(() =>
+    parseInspectorSnapshotV1({
+      ...snapshot,
+      sequence: 2,
+      events: [
+        createInspectorEventV1({
+          epoch: id,
+          sequence: 1,
+          sourceRevision: 2,
+          request,
+        }),
+        createInspectorEventV1({
+          epoch: id,
+          sequence: 2,
+          sourceRevision: 1,
+          request,
+        }),
+      ],
+    }),
+  ).toThrow("INSPECTOR_CONTRACT_INVALID");
   for (const patch of [
     { events: [event, event] },
     { sequence: 0 },
+    { sequence: 2 },
+    { dropped: 1 },
     { epoch: `hmac-sha256:${"b".repeat(64)}` },
     { events: Array(129).fill(event) },
   ])

@@ -55,6 +55,7 @@ export function reduceInspectorEventV1(
     projection: parseInspectorSnapshotV1({
       ...previous,
       sequence: event.sequence,
+      dropped: Math.max(previous.dropped, event.sequence - 128),
       events: [...previous.events, event].slice(-128),
     }),
   });

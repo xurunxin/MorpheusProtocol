@@ -78,6 +78,8 @@ test("Inspector reducer 容量有界，过期重复不能猜测幂等", () => {
     projection = { ...next.projection, events: [...next.projection.events] };
   }
   expect(projection.events).toHaveLength(128);
+  expect(projection.dropped).toBe(2);
+  expect(reduceInspectorEventV1(projection, event(3)).kind).toBe("duplicate");
   expect(reduceInspectorEventV1(projection, event(1))).toEqual({
     kind: "snapshot-required",
     reason: "expired-duplicate",
@@ -98,4 +100,14 @@ test("Inspector client 仅调用注入的只读 transport，取消不调用 tran
     "INSPECTOR_READ_ABORTED",
   );
   expect(reads).toBe(1);
+  const corrupt = createRequestInspectorClientV1({
+    snapshot: () => ({
+      ...empty,
+      sequence: 2,
+      events: [event(1, 2), event(2, 1)],
+    }),
+  });
+  await expect(corrupt.snapshot()).rejects.toThrow(
+    "INSPECTOR_CONTRACT_INVALID",
+  );
 });
