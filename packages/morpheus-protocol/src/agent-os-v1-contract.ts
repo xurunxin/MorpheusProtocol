@@ -2221,6 +2221,12 @@ function canonicalPromptProjectionDigest(value: unknown): string {
   return `sha256:${sha256Hex(canonicalJson(value))}`;
 }
 
+export function parseAgentOsV1CanonicalPromptInput(
+  input: unknown,
+): Readonly<AgentOsV1CanonicalPromptInput> {
+  return canonicalPromptInput(input);
+}
+
 function canonicalPromptInput(
   input: unknown,
 ): Readonly<AgentOsV1CanonicalPromptInput> {

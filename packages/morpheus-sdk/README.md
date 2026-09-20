@@ -1,5 +1,9 @@
 # @xurunxin/morpheus-sdk
 
+0.6.6：新增 `createWorkerPromptClientV1({ request }).request(input, signal)`，精确依赖 Protocol 0.6.6。调用方注入已授权私有 transport；客户端校验请求与响应绑定，不持有执行权限，不重试。AbortSignal 只取消传输，取消 Run 必须显式发送 prompt.cancel。
+
+transport 必须允许读／取消与长时间 start 并发，按 requestId 关联响应并序列化帧写入。命令幂等性和当前执行状态由 Worker 持久化 owner 处理；SDK 不创建 claim、grant 或时间戳。
+
 0.6.4：`createRequestInspectorWireClientV1({ request }).read(request, signal)` 对接已有本地 transport，先验证只读请求，再验证响应身份、ready/unavailable 与事件数量。不建立连接、不自动重试、不管理执行或捕获权限。
 
 H12（0.6.3）：`createRequestInspectorClientV1({ snapshot })` 使用调用方提供的已授权只读 transport，验证返回快照。`reduceInspectorEventV1(previous, event)` 是纯函数，返回 applied、duplicate 或 snapshot-required；epoch 改变、cursor 缺口、摘要冲突、过期重复及同请求来源 revision 倒退均要求重新读取快照。历史最多保留 128 项。取消读取不取消执行，没有重试、执行或开启原始捕获接口。

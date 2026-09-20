@@ -1,5 +1,9 @@
 # 更新日志
 
+## 0.6.6
+
+- 新增无状态 Worker Prompt v1 客户端，校验业务输入和响应绑定；中断传输不取消 Run，精确依赖 Protocol 0.6.6。
+
 ## 未发布
 
 - 0.6.4：精确依赖 Protocol 0.6.4，增加正式 Inspector wire client，拒绝关联漂移、超出请求容量和取消后结果。

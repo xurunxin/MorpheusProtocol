@@ -334,6 +334,9 @@ function writeV3Consumer(consumerDirectory) {
       `if (typeof createBrowserInteractiveTransport !== "function") throw new Error("missing sdk/browser transport");\n` +
       `const p4 = await import("@xurunxin/morpheus-protocol");\n` +
       `const s4 = await import("@xurunxin/morpheus-sdk");\n` +
+      `const workerRead={schemaVersion:p4.AGENT_OS_WORKER_PROMPT_V1,operation:"prompt.read",requestId:"packed.worker",runId:"run.packed",cursor:null,limit:1};\n` +
+      `const workerClient=s4.createWorkerPromptClientV1({request:(r)=>p4.parseAgentOsWorkerPromptResponseV1({schemaVersion:r.schemaVersion,operation:r.operation,requestId:r.requestId,requestDigest:p4.createAgentOsWorkerPromptRequestDigestV1(r),status:"rejected",code:"NOT_FOUND"})});\n` +
+      `if((await workerClient.request(p4.decodeAgentOsWorkerPromptRequestV1(p4.encodeAgentOsWorkerPromptRequestV1(workerRead)))).code!=="NOT_FOUND") throw new Error("Worker Prompt packed consumer failed");\n` +
       `const inspectorRead={schemaVersion:p4.REQUEST_INSPECTOR_SCHEMA_V1,operation:"snapshot.read",requestId:"packed.inspector",limit:1};\n` +
       `const inspectorWire=s4.createRequestInspectorWireClientV1({request:()=>p4.parseInspectorReadResponseV1({schemaVersion:inspectorRead.schemaVersion,operation:inspectorRead.operation,requestId:inspectorRead.requestId,ready:false,reasonCode:"unavailable",snapshot:null})});\n` +
       `if((await inspectorWire.read(JSON.parse(p4.serializeInspectorReadRequestV1(inspectorRead)))).ready) throw new Error("Inspector wire capability drift");\n` +
