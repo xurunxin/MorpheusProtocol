@@ -16,7 +16,7 @@ assert(
   protocolPackage.name === "@xurunxin/morpheus-protocol",
   "unexpected Protocol identity",
 );
-assert(protocolPackage.version === "0.6.3", "unexpected Protocol version");
+assert(protocolPackage.version === "0.6.4", "unexpected Protocol version");
 assert(
   protocolPackage.private !== true,
   "Protocol package must be publishable",
@@ -33,8 +33,8 @@ assert(
 assert(sdkPackage.private !== true, "SDK package must be publishable");
 assert(
   JSON.stringify(sdkPackage.dependencies) ===
-    JSON.stringify({ "@xurunxin/morpheus-protocol": "0.6.3" }),
-  "SDK must depend only on exact @xurunxin/morpheus-protocol@0.6.3",
+    JSON.stringify({ "@xurunxin/morpheus-protocol": "0.6.4" }),
+  "SDK must depend only on exact @xurunxin/morpheus-protocol@0.6.4",
 );
 
 for (const file of await typescriptFiles(resolve(protocolRoot, "src"))) {

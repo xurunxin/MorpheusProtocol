@@ -6,7 +6,51 @@ import {
   parseInspectorSnapshotV1,
   serializeInspectorEventV1,
   type InspectorRequestV1,
+  parseInspectorReadRequestV1,
+  parseInspectorReadResponseV1,
+  serializeInspectorReadResponseV1,
 } from "../src/request-inspector-v1.js";
+
+test("Inspector wire 仅允许有界只读快照，不接受 capture/执行或不一致 ready", () => {
+  const request = {
+    schemaVersion: "agent-os-request-inspector/v1",
+    operation: "snapshot.read",
+    requestId: "inspector.read.1",
+    limit: 32,
+  };
+  expect(parseInspectorReadRequestV1(request).limit).toBe(32);
+  for (const patch of [
+    { operation: "capture.start" },
+    { operation: "turn.retry" },
+    { limit: 129 },
+    { limit: 0 },
+    { limit: 1.5 },
+    { requestId: "private/path" },
+    { raw: true },
+  ])
+    expect(() =>
+      parseInspectorReadRequestV1({ ...request, ...patch }),
+    ).toThrow();
+  const response = {
+    schemaVersion: request.schemaVersion,
+    operation: request.operation,
+    requestId: request.requestId,
+    ready: false,
+    reasonCode: "unavailable",
+    snapshot: null,
+  };
+  expect(
+    parseInspectorReadResponseV1(
+      JSON.parse(serializeInspectorReadResponseV1(response)),
+    ),
+  ).toEqual(response);
+  expect(() =>
+    parseInspectorReadResponseV1({ ...response, ready: true }),
+  ).toThrow();
+  expect(() =>
+    parseInspectorReadResponseV1({ ...response, reasonCode: null }),
+  ).toThrow();
+});
 
 const id = `hmac-sha256:${"a".repeat(64)}` as const;
 const request: InspectorRequestV1 = {

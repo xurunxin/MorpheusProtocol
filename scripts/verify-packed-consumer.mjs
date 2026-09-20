@@ -334,6 +334,9 @@ function writeV3Consumer(consumerDirectory) {
       `if (typeof createBrowserInteractiveTransport !== "function") throw new Error("missing sdk/browser transport");\n` +
       `const p4 = await import("@xurunxin/morpheus-protocol");\n` +
       `const s4 = await import("@xurunxin/morpheus-sdk");\n` +
+      `const inspectorRead={schemaVersion:p4.REQUEST_INSPECTOR_SCHEMA_V1,operation:"snapshot.read",requestId:"packed.inspector",limit:1};\n` +
+      `const inspectorWire=s4.createRequestInspectorWireClientV1({request:()=>p4.parseInspectorReadResponseV1({schemaVersion:inspectorRead.schemaVersion,operation:inspectorRead.operation,requestId:inspectorRead.requestId,ready:false,reasonCode:"unavailable",snapshot:null})});\n` +
+      `if((await inspectorWire.read(JSON.parse(p4.serializeInspectorReadRequestV1(inspectorRead)))).ready) throw new Error("Inspector wire capability drift");\n` +
       `const inspector = {schemaVersion:p4.REQUEST_INSPECTOR_SCHEMA_V1,epoch:"hmac-sha256:"+"a".repeat(64),sequence:0,dropped:0,events:[]};\n` +
       `const inspectorClient = s4.createRequestInspectorClientV1({snapshot:()=>JSON.parse(p4.serializeInspectorSnapshotV1(inspector))});\n` +
       `if ((await inspectorClient.snapshot()).sequence !== 0 || typeof s4.reduceInspectorEventV1 !== "function" || typeof p4.createInspectorEventV1 !== "function") throw new Error("Inspector packed consumer failed");\n` +

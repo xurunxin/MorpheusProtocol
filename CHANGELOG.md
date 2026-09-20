@@ -2,6 +2,8 @@
 
 ## 未发布
 
+- 0.6.4：补充 H12 Inspector 有界只读 wire profile，严格 ready/unavailable 关系及 SDK 请求关联；完整捕获保持本地 API，不进入 App profile。
+
 - 0.6.3：H12 脱敏 Inspector DTO 与规范编码；数值、固定原因码、HMAC 标识、来源容量及 cache usage 证据严格校验。SDK 增加纯事件 reducer 和注入式只读快照客户端，重复幂等、缺口/冲突要求快照；不提供执行或原始捕获端口。
 
 - Protocol/SDK 锁步准备 0.6.2：新增 Host 已预留子预算的排他消费绑定合同，包含独立 budget tree/scope root、store/instance/claim revision、source grant/lease 与允许的本地派生操作。规范编码与严格拒绝身份漂移、未知字段、错误版本、无效时间窗和畸形数组；不引入存储或签发 authority。
