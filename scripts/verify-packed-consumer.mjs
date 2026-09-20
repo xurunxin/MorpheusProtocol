@@ -334,6 +334,9 @@ function writeV3Consumer(consumerDirectory) {
       `if (typeof createBrowserInteractiveTransport !== "function") throw new Error("missing sdk/browser transport");\n` +
       `const p4 = await import("@xurunxin/morpheus-protocol");\n` +
       `const s4 = await import("@xurunxin/morpheus-sdk");\n` +
+      `const taskRead={schemaVersion:p4.AGENT_OS_TASK_HANDLE_V1,operation:"task.observe",requestId:"packed.task",handleId:"task."+"1".repeat(64)};\n` +
+      `const taskClient=s4.createTaskHandleClientV1({request:(r)=>({schemaVersion:r.schemaVersion,operation:r.operation,requestId:r.requestId,requestDigest:p4.createAgentOsTaskRequestDigestV1(r),status:"rejected",code:"NOT_FOUND"})});\n` +
+      `if((await taskClient.request(p4.decodeAgentOsTaskRequestV1(p4.encodeAgentOsTaskRequestV1(taskRead)))).code!=="NOT_FOUND") throw new Error("Task handle packed consumer failed");\n` +
       `const workerRead={schemaVersion:p4.AGENT_OS_WORKER_PROMPT_V1,operation:"prompt.read",requestId:"packed.worker",runId:"run.packed",cursor:null,limit:1};\n` +
       `const workerClient=s4.createWorkerPromptClientV1({request:(r)=>p4.parseAgentOsWorkerPromptResponseV1({schemaVersion:r.schemaVersion,operation:r.operation,requestId:r.requestId,requestDigest:p4.createAgentOsWorkerPromptRequestDigestV1(r),status:"rejected",code:"NOT_FOUND"})});\n` +
       `if((await workerClient.request(p4.decodeAgentOsWorkerPromptRequestV1(p4.encodeAgentOsWorkerPromptRequestV1(workerRead)))).code!=="NOT_FOUND") throw new Error("Worker Prompt packed consumer failed");\n` +

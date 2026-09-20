@@ -131,3 +131,4 @@ v1/v2/v3 reducer 返回 `rebuild-required`，调用方需要重新获取完整�
 ## 许可证
 
 Apache-2.0，详见包内 `LICENSE`。
+0.6.7：新增 `createTaskHandleClientV1({ request }).request(input, signal)`，精确依赖 Protocol 0.6.7。观察、交付模式切换和取消意图均校验严格契约及响应绑定，无重试、缓存或调度。AbortSignal 仅中断传输；调用方保留视图时可使用 Protocol successor 校验器防止状态回退。

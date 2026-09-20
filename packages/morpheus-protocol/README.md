@@ -164,3 +164,4 @@ proof 签发/撤销 port 由 Control 侧任务实现，attachment 上传通道�
 ## 许可证
 
 Apache-2.0，详见包内 `LICENSE`。
+0.6.7：新增 `agent-os-task-handle/v1`。`createAgentOsTaskHandleV1` 固定 WorkItem/RunChild/父子 attempt/input/target 身份，`parseAgentOsTaskViewV1` 分离执行、父结算、交付、验收及追加证据。提供 `parse/encode/decodeAgentOsTaskRequestV1`、对应 Response API、请求/命令摘要与 `assertAgentOsTaskResponseBindingV1`，`assertAgentOsTaskViewSuccessorV1` 校验单个句柄的视图演进。parser 不验证回执真实性、不签发权限；Host 必须核对持久化事实。

@@ -1,9 +1,8 @@
 {
   "name": "@xurunxin/morpheus-sdk",
-  "version": "0.6.6",
+  "version": "0.6.7",
   "description": "Morpheus 应用层轻量客户端 SDK",
   "type": "module",
-  "packageManager": "bun@1.4.0",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
@@ -42,7 +41,7 @@
   },
   "engines": {
     "node": ">=20",
-    "bun": "1.4.0"
+    "bun": ">=1.4.0"
   },
   "publishConfig": {
     "access": "public",
@@ -56,6 +55,6 @@
     "prepack": "bun run build"
   },
   "dependencies": {
-    "@xurunxin/morpheus-protocol": "0.6.6"
+    "@xurunxin/morpheus-protocol": "0.6.7"
   }
 }

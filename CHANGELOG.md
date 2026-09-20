@@ -2,6 +2,8 @@
 
 ## 未发布
 
+- 0.6.7：任务句柄 v1 身份、状态视图、追加式制品/检查/结算证据、规范 wire 与 SDK。终态允许审计 revision 增长但不能翻转执行结果；中断观察不产生取消。
+
 - 0.6.5：增加 `agent-os-worker-authority/v1` 私有监督进程通道契约。绑定请求摘要、worker/Run/claim/Effect 身份与预算复合回执，拒绝调用方注入预算、approval 或 current snapshot；保留账本变更时间与当前读取时间的区别。Protocol/SDK 锁步；不代表生产 Worker ingress、H14/H15 或 G4 已完成。
 
 - 0.6.4：补充 H12 Inspector 有界只读 wire profile，严格 ready/unavailable 关系及 SDK 请求关联；完整捕获保持本地 API，不进入 App profile。
