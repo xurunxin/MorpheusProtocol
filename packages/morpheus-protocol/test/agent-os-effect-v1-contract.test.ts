@@ -452,9 +452,9 @@ function reconciliationFixture(
   };
   const stateSource = {
     ...budget.stateSource,
-    ownerDisposition: "closed" as const,
+    ownerDisposition: "reserved" as const,
     reservationRevision: 2,
-    balanceRevision: 1,
+    balanceRevision: 0,
     available: proofZero,
     committedTotal: mutation.amount,
     latestSettlementReceiptDigest: settlement.receiptDigest,

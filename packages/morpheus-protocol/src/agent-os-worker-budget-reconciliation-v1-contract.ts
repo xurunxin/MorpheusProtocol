@@ -148,7 +148,7 @@ function unsigned(
       settlement.reservationRevision !== reservationState.reservationRevision ||
       reservationState.latestSettlementReceiptDigest !==
         settlement.receiptDigest ||
-      reservationState.ownerDisposition !== "closed"
+      reservationState.ownerDisposition !== "reserved"
     )
       invalid();
     for (const dimension of dimensions) {
