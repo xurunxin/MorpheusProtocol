@@ -1,5 +1,7 @@
 # Worker 受管子授权 v1
 
+父 grant 摘要统一使用 `createAgentOsWorkerParentGrantDigestV1`，基于严格解析后的规范字段顺序生成。Control 和 Worker 不得各自选择对象序列化顺序或不同的哈希 preimage。
+
 私有 `agent-os-worker-authority/v1` 增加独立 `run.authorize.child` 操作，其 payload 使用 `agent-os-worker-child-authority/v1`。现有 `run.authorize` 仍表示独立 root，不增加可选字段。旧端拒绝未知操作时必须返回 unavailable，不能回退为 root 授权。此版本仅交付严格协议，不证明 Control/Worker/Host 接线或 H15/G4 完成。
 
 Worker 在真实父 Kernel 存储创建 RunChild 记录并持久化授权 outbox 后，发送完整 parent claim、parent grant digest、父 turn/revision、Kernel child ID/logical key、child Run/turn/attempt、输入/definition/capability/policy digest、请求预算和持久化准备时间。`kernelFenceDigest` 覆盖这些字段的完整规范化 preimage；它是关联摘要，不能替代读取真实 Kernel。创建 RunChild 不等于创建独立 child Run；父存储、Worker owner、子存储和 Control 之间不能假设跨库原子事务。

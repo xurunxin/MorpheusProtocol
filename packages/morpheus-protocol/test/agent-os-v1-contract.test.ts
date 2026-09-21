@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
 import {
+  createAgentOsWorkerParentGrantDigestV1,
   createAgentOsWorkerChildAuthorizationInputV1,
   createAgentOsWorkerChildAuthorizationInputDigestV1,
   parseAgentOsWorkerChildAuthorizationInputV1,
@@ -230,13 +231,24 @@ function fixture(
 
 test("child authorization binds parent evidence, child authority digests and a reservation contract", () => {
   const contract = fixture();
+  const parentGrant = {
+    ...contract.executionGrant,
+    grantId: "grant.parent",
+    runId: "run.parent",
+    attemptId: "attempt.parent",
+  };
+  expect(createAgentOsWorkerParentGrantDigestV1(parentGrant)).toBe(
+    createAgentOsWorkerParentGrantDigestV1(
+      Object.fromEntries(Object.entries(parentGrant).reverse()),
+    ),
+  );
   const input = createAgentOsWorkerChildAuthorizationInputV1({
     schemaVersion: "agent-os-worker-child-authority/v1",
     commandId: "command.child",
     admissionId: "admission.child",
     parentClaim: {
       grantId: "grant.parent",
-      leaseId: "lease.parent",
+      leaseId: "lease.demo",
       leaseEpoch: "lease-epoch:current",
       authorityDomain: "authority.demo",
       runId: "run.parent",
@@ -250,7 +262,7 @@ test("child authorization binds parent evidence, child authority digests and a r
       claimFence: 1,
       expiresAt: "2026-08-05T00:05:00.000Z",
     },
-    parentGrantDigest: digest("parent-grant"),
+    parentGrantDigest: createAgentOsWorkerParentGrantDigestV1(parentGrant),
     parentTurnId: "turn.parent",
     parentRunRevision: 3,
     kernelChildId: "child.one",

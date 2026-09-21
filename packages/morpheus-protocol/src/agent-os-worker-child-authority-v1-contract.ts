@@ -1,5 +1,8 @@
 import { deepFreeze, sha256Hex } from "./contract-primitives.js";
-import { parseAgentOsV1ExecutionClaimBinding } from "./agent-os-v1-contract.js";
+import {
+  parseAgentOsV1ExecutionClaimBinding,
+  parseAgentOsV1ExecutionGrant,
+} from "./agent-os-v1-contract.js";
 import {
   parseAgentOsBudgetReservationRequestV1,
   parseAgentOsBudgetReservationReceiptV1,
@@ -87,6 +90,11 @@ const dimensions = [
   "toolCalls",
   "costUsdMicros",
 ] as const;
+
+/** Both owners hash the same normalized grant, independent of object property order. */
+export function createAgentOsWorkerParentGrantDigestV1(input: unknown): string {
+  return hash(parseAgentOsV1ExecutionGrant(input));
+}
 
 function unsignedInput(
   input: unknown,
