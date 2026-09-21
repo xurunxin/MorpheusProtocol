@@ -50,3 +50,4 @@ export * from "./agent-os-worker-budget-reconciliation-v1-contract.js";
 export * from "./agent-os-worker-prompt-v1-contract.js";
 export * from "./agent-os-task-handle-v1-contract.js";
 export * from "./agent-os-worker-task-binding-v1-contract.js";
+export * from "./agent-os-worker-task-start-v1-contract.js";

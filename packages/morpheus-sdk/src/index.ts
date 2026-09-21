@@ -79,3 +79,4 @@ export * from "./interactive-v4.js";
 export * from "./request-inspector-v1.js";
 export * from "./worker-prompt-v1.js";
 export * from "./task-handle-v1.js";
+export * from "./worker-task-start-v1.js";

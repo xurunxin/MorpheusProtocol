@@ -1,5 +1,7 @@
 # MorpheusProtocol
 
+0.6.12 新增私有 Worker 业务 `task.start`：只接收 prompt、标题、验收条件和初始交付模式，由 owner 生成 Run/WorkItem/TaskHandle 并选择预算与不可变目标 revision。SDK 的 `createWorkerTaskStartClientV1` 校验完整响应绑定，不重试；后续沿用 TaskHandle 的 observe、set-delivery 和 cancel。
+
 0.6.11 增加私有 [Worker WorkItem 绑定契约](docs/worker-task-binding-v1.md)：`task.bind` 和独立只读 `task.bind.read` 关联真实 Control WorkItem 回执与完整 Kernel child 输入。它不接收业务调用方伪造的 authority，也不替代当前执行检查；生产 owner 接线和 G4 尚未由本包完成。
 
 0.6.10 增加只读 `run.authorize.child.read`：精确查询已提交的子授权回执，查询未命中不得创建 grant 或 reservation。历史回执不代表当前执行许可。

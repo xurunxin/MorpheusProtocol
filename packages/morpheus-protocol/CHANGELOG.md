@@ -1,5 +1,9 @@
 # 更新日志
 
+## 0.6.12
+
+- Add strict private Worker task.start business contract and stateless SDK client, with full command/response binding and canonical prompt identity.
+
 ## 0.6.11
 
 - 新增私有 Worker WorkItem 绑定及只读恢复契约，严格校验实际 root/child WorkItem 回执 lineage、请求摘要与业务元数据。无存储、授权或 Kernel lifecycle 实现。
