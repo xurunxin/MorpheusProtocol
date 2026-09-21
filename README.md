@@ -2,6 +2,8 @@
 
 运行与验证要求 Bun >=1.4.0，直接使用已安装的兼容版本；CI 使用稳定版。不再为测试额外切换到 1.4.0。依赖和类型包仍由 lockfile 精确固定。
 
+0.6.9 增加独立 [Worker 子授权契约](docs/worker-child-authority-v1.md)：绑定持久化父 claim、Kernel child 证据、子授权和预算 reservation。旧 root 授权不变，未知子授权操作不能降级为 root。本包不签发授权，Control/Worker 真实接线仍需完成。
+
 0.6.8 增加 [Worker Effect 预算对账](docs/worker-budget-reconciliation-v1.md) 的严格 wire 契约：已知结果按预留上限提交，unknown 保留未决额度。协议不执行账本变更，也不代表 delegated task、Control/Worker 接线或 H15/G4 已完成。
 
 0.6.7 增加 [任务句柄契约](docs/task-handle-v1.md)：固定绑定既有 WorkItem、Kernel RunChild 与父子 attempt，分离执行、父任务结算、交付和验收证据。SDK 提供无状态观察、交付模式切换与显式取消意图；Host/Terminal 接入及 H14 端到端验收仍需后续交付。

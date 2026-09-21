@@ -1,5 +1,12 @@
 import { deepFreeze, sha256Hex } from "./contract-primitives.js";
 import {
+  parseAgentOsWorkerChildAuthorizationInputV1,
+  parseAgentOsWorkerChildAuthorizationReceiptV1,
+  assertAgentOsWorkerChildAuthorizationBindingV1,
+  type AgentOsWorkerChildAuthorizationInputV1,
+  type AgentOsWorkerChildAuthorizationReceiptV1,
+} from "./agent-os-worker-child-authority-v1-contract.js";
+import {
   parseAgentOsWorkerBudgetReconciliationInputV1,
   parseAgentOsWorkerBudgetReconciliationReceiptV1,
   assertAgentOsWorkerBudgetReconciliationBindingV1,
@@ -108,6 +115,10 @@ export interface AgentOsWorkerCurrentAuthorityV1 {
 }
 
 type ControlRequest =
+  | {
+      readonly operation: "run.authorize.child";
+      readonly payload: AgentOsWorkerChildAuthorizationInputV1;
+    }
   | {
       readonly operation: "run.authorize";
       readonly payload: {
@@ -220,6 +231,11 @@ export type AgentOsWorkerAuthorityResponseV1 = Readonly<{
         readonly status: "accepted";
         readonly operation: `${WriterRequest["operation"]}.receipt`;
         readonly receipt: AgentOsWorkerWriterReceiptV1;
+      }
+    | {
+        readonly status: "accepted";
+        readonly operation: "run.authorize.child.receipt";
+        readonly receipt: AgentOsWorkerChildAuthorizationReceiptV1;
       }
     | {
         readonly status: "accepted";
@@ -337,6 +353,13 @@ export function parseAgentOsWorkerAuthorityRequestV1(
         permitId: id(payload.permitId),
         reservationId: id(payload.reservationId),
       },
+    });
+  }
+  if (value.operation === "run.authorize.child") {
+    return deepFreeze({
+      ...base,
+      operation: value.operation,
+      payload: parseAgentOsWorkerChildAuthorizationInputV1(value.payload),
     });
   }
   if (value.operation === "run.authorize") {
@@ -857,6 +880,7 @@ export function parseAgentOsWorkerAuthorityResponseV1(
     operation !== "writer.recover.receipt" &&
     operation !== "writer.consume.receipt" &&
     operation !== "run.authorize.receipt" &&
+    operation !== "run.authorize.child.receipt" &&
     operation !== "authority.read.receipt" &&
     operation !== "effect.permit.issue.receipt" &&
     operation !== "effect.budget.admit.receipt" &&
@@ -873,6 +897,13 @@ export function parseAgentOsWorkerAuthorityResponseV1(
     authorityNow: instant(value.authorityNow),
   } as const;
   if (value.status === "accepted") {
+    if (operation === "run.authorize.child.receipt") {
+      const receipt = parseAgentOsWorkerChildAuthorizationReceiptV1(
+        value.receipt,
+      );
+      if (receipt.budgetReceipt.committedAt > base.authorityNow) invalid();
+      return deepFreeze({ ...base, operation, status: "accepted", receipt });
+    }
     if (operation === "effect.budget.reconcile.receipt") {
       const receipt = parseAgentOsWorkerBudgetReconciliationReceiptV1(
         value.receipt,
@@ -1013,6 +1044,19 @@ export function assertAgentOsWorkerAuthorityResponseBindingV1(
       invalid();
     return;
   }
+  if (request.operation === "run.authorize.child") {
+    if (response.operation !== "run.authorize.child.receipt") invalid();
+    assertAgentOsWorkerChildAuthorizationBindingV1(
+      request.payload,
+      response.receipt,
+    );
+    if (
+      response.receipt.authorization.contract.executionGrant.hostId !==
+      request.workerId
+    )
+      invalid();
+    return;
+  }
   if (request.operation === "run.authorize") {
     if (response.operation !== "run.authorize.receipt") invalid();
     const grant = response.receipt.contract.executionGrant;
@@ -1037,6 +1081,7 @@ export function assertAgentOsWorkerAuthorityResponseBindingV1(
   }
   if (
     response.operation === "run.authorize.receipt" ||
+    response.operation === "run.authorize.child.receipt" ||
     response.operation === "authority.read.receipt" ||
     response.operation === "effect.permit.issue.receipt" ||
     response.operation === "effect.budget.admit.receipt" ||

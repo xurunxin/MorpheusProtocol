@@ -1,6 +1,21 @@
 import { describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
 import {
+  createAgentOsWorkerParentGrantDigestV1,
+  createAgentOsWorkerChildAuthorizationInputV1,
+  createAgentOsWorkerChildAuthorizationInputDigestV1,
+  parseAgentOsWorkerChildAuthorizationInputV1,
+  createAgentOsWorkerChildAuthorizationReceiptV1,
+  parseAgentOsWorkerChildAuthorizationReceiptV1,
+  assertAgentOsWorkerChildAuthorizationBindingV1,
+} from "../src/agent-os-worker-child-authority-v1-contract.js";
+import {
+  createAgentOsBudgetReservationRequestDigestV1,
+  createAgentOsBudgetReservationReceiptDigestV1,
+  type AgentOsBudgetReservationRequestUnsignedV1,
+  type AgentOsBudgetReservationReceiptUnsignedV1,
+} from "../src/agent-os-run-tree-budget-v1-contract.js";
+import {
   AGENT_OS_WORKER_AUTHORITY_V1,
   assertAgentOsWorkerAuthorityResponseBindingV1,
   createAgentOsWorkerAuthorityRequestDigestV1,
@@ -213,6 +228,272 @@ function fixture(
     },
   };
 }
+
+test("child authorization binds parent evidence, child authority digests and a reservation contract", () => {
+  const contract = fixture();
+  const parentGrant = {
+    ...contract.executionGrant,
+    grantId: "grant.parent",
+    runId: "run.parent",
+    attemptId: "attempt.parent",
+  };
+  expect(createAgentOsWorkerParentGrantDigestV1(parentGrant)).toBe(
+    createAgentOsWorkerParentGrantDigestV1(
+      Object.fromEntries(Object.entries(parentGrant).reverse()),
+    ),
+  );
+  const input = createAgentOsWorkerChildAuthorizationInputV1({
+    schemaVersion: "agent-os-worker-child-authority/v1",
+    commandId: "command.child",
+    admissionId: "admission.child",
+    parentClaim: {
+      grantId: "grant.parent",
+      leaseId: "lease.demo",
+      leaseEpoch: "lease-epoch:current",
+      authorityDomain: "authority.demo",
+      runId: "run.parent",
+      attemptId: "attempt.parent",
+      instanceId: "instance.demo",
+      instanceGeneration: 1,
+      storeId: "store.parent",
+      storeGeneration: 1,
+      writerIncarnationId: "writer.parent",
+      claimId: "claim.parent",
+      claimFence: 1,
+      expiresAt: "2026-08-05T00:05:00.000Z",
+    },
+    parentGrantDigest: createAgentOsWorkerParentGrantDigestV1(parentGrant),
+    parentTurnId: "turn.parent",
+    parentRunRevision: 3,
+    parentDefinitionDigest: parentGrant.definitionDigest,
+    kernelChildId: "child.one",
+    logicalChildKey: "child.one",
+    runId: "run.demo",
+    turnId: "turn.demo",
+    attemptId: "attempt.demo",
+    inputDigest: digest("child-prompt"),
+    definitionDigest: contract.executionGrant.definitionDigest,
+    capabilityDigest: contract.executionGrant.capabilityDigest,
+    policyDigest: contract.executionGrant.policyDigest,
+    requestedBudget: {
+      inputTokens: 10,
+      outputTokens: 10,
+      toolCalls: 2,
+      costUsdMicros: 20,
+    },
+    preparedAt: "2026-08-05T00:00:01.000Z",
+  });
+  const draft: AgentOsBudgetReservationRequestUnsignedV1 = {
+    schemaVersion: "agent-os-run-tree-budget/v1",
+    operation: "reserve",
+    commandId: "command.reserve",
+    reservationId: "reservation.child",
+    ceilingId: "ceiling.parent",
+    ceilingDigest: digest("ceiling"),
+    expectedCeilingRevision: 0,
+    balanceStateDigest: digest("balance"),
+    expectedBalanceRevision: 0,
+    parentReservationId: null,
+    parentReservationDigest: null,
+    parentAttributionKey: null,
+    subject: {
+      kind: "child",
+      runId: "run.demo",
+      turnId: null,
+      attemptId: null,
+      effectId: null,
+      logicalKey: "child:child.one",
+      storeGeneration: 1,
+    },
+    requested: input.requestedBudget,
+    upperBoundEvidenceDigest: digest("bound"),
+    effectPermitDigest: null,
+    kernelFenceDigest: input.kernelFenceDigest,
+    attributionKey: digest("attribution"),
+    chargeKey: digest("charge"),
+    requestedAt: input.preparedAt,
+  };
+  const budgetRequest = {
+    ...draft,
+    requestDigest: createAgentOsBudgetReservationRequestDigestV1(draft),
+  };
+  const reservation: AgentOsBudgetReservationReceiptUnsignedV1 = {
+    schemaVersion: "agent-os-run-tree-budget/v1",
+    operation: "reserve",
+    receiptId: draft.commandId,
+    commandId: draft.commandId,
+    reservationId: draft.reservationId,
+    requestDigest: budgetRequest.requestDigest,
+    disposition: "reserved",
+    denialReason: null,
+    ceilingId: draft.ceilingId,
+    ceilingDigest: draft.ceilingDigest,
+    ceilingRevision: 0,
+    balanceStateDigest: draft.balanceStateDigest,
+    balanceRevision: 1,
+    parentReservationId: null,
+    reservationRevision: 1,
+    reserved: input.requestedBudget,
+    availableBefore: input.requestedBudget,
+    availableAfter: {
+      inputTokens: 0,
+      outputTokens: 0,
+      toolCalls: 0,
+      costUsdMicros: 0,
+    },
+    attributionKey: draft.attributionKey,
+    chargeKey: draft.chargeKey,
+    committedAt: input.preparedAt,
+  };
+  const receipt = createAgentOsWorkerChildAuthorizationReceiptV1({
+    schemaVersion: "agent-os-worker-child-authority/v1",
+    commandId: input.commandId,
+    admissionId: input.admissionId,
+    requestDigest: createAgentOsWorkerChildAuthorizationInputDigestV1(input),
+    parentGrantDigest: input.parentGrantDigest,
+    kernelFenceDigest: input.kernelFenceDigest,
+    authorization: {
+      ownerRevision: 1,
+      ownerDigest: digest("owner"),
+      turnId: input.turnId,
+      contract,
+      duplicate: false,
+    },
+    budgetRequest,
+    budgetReceipt: {
+      ...reservation,
+      receiptDigest: createAgentOsBudgetReservationReceiptDigestV1(reservation),
+    },
+  });
+  expect(() =>
+    assertAgentOsWorkerChildAuthorizationBindingV1(input, receipt),
+  ).not.toThrow();
+  expect(
+    parseAgentOsWorkerChildAuthorizationInputV1(
+      JSON.parse(JSON.stringify(input)),
+    ),
+  ).toEqual(input);
+  const wire = {
+    schemaVersion: AGENT_OS_WORKER_AUTHORITY_V1,
+    requestId: "request.child",
+    workerId: "host.demo",
+    operation: "run.authorize.child",
+    payload: input,
+  };
+  const response = {
+    schemaVersion: AGENT_OS_WORKER_AUTHORITY_V1,
+    requestId: wire.requestId,
+    workerId: wire.workerId,
+    operation: "run.authorize.child.receipt",
+    requestDigest: createAgentOsWorkerAuthorityRequestDigestV1(wire),
+    authorityNow: input.preparedAt,
+    status: "accepted",
+    receipt,
+  };
+  expect(() =>
+    assertAgentOsWorkerAuthorityResponseBindingV1(
+      wire,
+      JSON.parse(encodeAgentOsWorkerAuthorityResponseV1(response)),
+    ),
+  ).not.toThrow();
+  for (const altered of [
+    { ...input, parentRunRevision: 4 },
+    { ...input, parentClaim: { ...input.parentClaim, claimFence: 2 } },
+    { ...input, kernelChildId: "child.other" },
+    { ...input, scope: ["network"] },
+  ])
+    expect(() =>
+      parseAgentOsWorkerChildAuthorizationInputV1(altered),
+    ).toThrow();
+  const { kernelFenceDigest: ignored, ...unsigned } = input;
+  void ignored;
+  expect(() =>
+    createAgentOsWorkerChildAuthorizationInputV1({
+      ...unsigned,
+      preparedAt: input.parentClaim.expiresAt,
+    }),
+  ).toThrow();
+  expect(() =>
+    parseAgentOsWorkerChildAuthorizationInputV1({
+      ...input,
+      parentDefinitionDigest: digest("other-parent"),
+    }),
+  ).toThrow();
+  const { receiptDigest: oldReceiptDigest, ...unsignedReceipt } = receipt;
+  void oldReceiptDigest;
+  for (const patch of [
+    { receiptId: "receipt.impossible" },
+    { reservationRevision: 2 },
+    { availableAfter: { ...reservation.availableAfter, inputTokens: 1 } },
+    { parentReservationId: "reservation.foreign" },
+  ]) {
+    const altered = { ...reservation, ...patch };
+    expect(() =>
+      createAgentOsWorkerChildAuthorizationReceiptV1({
+        ...unsignedReceipt,
+        budgetReceipt: {
+          ...altered,
+          receiptDigest: createAgentOsBudgetReservationReceiptDigestV1(altered),
+        },
+      }),
+    ).toThrow();
+  }
+  for (const field of ["turnId", "attemptId"] as const) {
+    const altered = {
+      ...draft,
+      subject: { ...draft.subject, [field]: "unexpected.child" },
+    };
+    const changedRequest = {
+      ...altered,
+      requestDigest: createAgentOsBudgetReservationRequestDigestV1(altered),
+    };
+    const changedReceipt = {
+      ...reservation,
+      requestDigest: changedRequest.requestDigest,
+    };
+    expect(() =>
+      createAgentOsWorkerChildAuthorizationReceiptV1({
+        ...unsignedReceipt,
+        budgetRequest: changedRequest,
+        budgetReceipt: {
+          ...changedReceipt,
+          receiptDigest:
+            createAgentOsBudgetReservationReceiptDigestV1(changedReceipt),
+        },
+      }),
+    ).toThrow();
+  }
+  const other = createAgentOsWorkerChildAuthorizationInputV1({
+    ...unsigned,
+    commandId: "command.other",
+  });
+  expect(() =>
+    assertAgentOsWorkerChildAuthorizationBindingV1(other, receipt),
+  ).toThrow();
+  expect(() =>
+    createAgentOsWorkerChildAuthorizationInputV1({
+      ...unsigned,
+      runId: input.parentClaim.runId,
+    }),
+  ).toThrow();
+  expect(() =>
+    createAgentOsWorkerChildAuthorizationInputV1({
+      ...unsigned,
+      requestedBudget: {
+        inputTokens: 0,
+        outputTokens: 0,
+        toolCalls: 0,
+        costUsdMicros: 0,
+      },
+    }),
+  ).toThrow();
+  expect(() =>
+    parseAgentOsWorkerChildAuthorizationReceiptV1({
+      ...receipt,
+      receiptDigest: digest("forged"),
+    }),
+  ).toThrow();
+});
 
 test("managed Worker run authorization roundtrips a validated contract without canonicalSource", () => {
   const contract = fixture();
