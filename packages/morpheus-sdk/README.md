@@ -1,5 +1,7 @@
 # @xurunxin/morpheus-sdk
 
+0.6.12：`createWorkerTaskStartClientV1({ request }).request(input, signal)` 通过调用方注入的已授权 transport 请求创建 Task；只验证契约，不分配权限、不自动重试。AbortSignal 仅停止等待，取消已创建 Task 必须显式调用现有 TaskHandle cancel。
+
 0.6.11：精确依赖 Protocol 0.6.11；Worker/Control 私有 WorkItem 绑定不新增 App SDK 执行接口。
 
 0.6.6：新增 `createWorkerPromptClientV1({ request }).request(input, signal)`，精确依赖 Protocol 0.6.6。调用方注入已授权私有 transport；客户端校验请求与响应绑定，不持有执行权限，不重试。AbortSignal 只取消传输，取消 Run 必须显式发送 prompt.cancel。

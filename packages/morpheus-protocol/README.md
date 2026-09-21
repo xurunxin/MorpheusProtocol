@@ -1,5 +1,7 @@
 # @xurunxin/morpheus-protocol
 
+0.6.12：`agent-os-worker-task-start/v1` 为 Task 创建提供严格业务输入。使用 `parse/encode/decodeAgentOsWorkerTaskStartRequestV1`、对应 Response 和 `assertAgentOsWorkerTaskStartResponseBindingV1`；command digest 排除 transport requestId，完整保留业务参数。`createAgentOsWorkerTaskPromptDigestV1` 定义与已有 Worker child 相同的 canonical prompt digest。
+
 0.6.11：新增 Worker/Control 私有 `task.bind` 与 `task.bind.read`。`parseAgentOsWorkerTaskBindingInputV1`、`create/parseAgentOsWorkerTaskBindingReceiptV1` 和 `assertAgentOsWorkerTaskBindingV1` 绑定真实 Control WorkItem lineage、完整 child authorization 输入、验收条件与目标 revision。历史读取不创建 WorkItem，不授予新执行权限；详见 `docs/worker-task-binding-v1.md`。
 
 0.6.6：新增 `agent-os-worker-prompt/v1` 私有 Worker 业务入口：`prompt.start`（commandId/runId/turnId/attemptId/prompt）、`prompt.read`（runId/cursor/limit）和 `prompt.cancel`（commandId/runId/attemptId/reason）。严格拒绝调用方传入 grant、claim、fence、策略、配置和时间戳；canonical Prompt 响应仍由 Worker 生成。最大帧 1 MiB，read 最多 256 个事件，prompt 复用 32 条 user 消息／64 KiB 解析器，cancel reason 最多 1024 UTF-8 字节。

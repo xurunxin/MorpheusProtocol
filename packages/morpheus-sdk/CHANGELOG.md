@@ -1,5 +1,9 @@
 # 更新日志
 
+## 0.6.12
+
+- Add strict private Worker task.start business contract and stateless SDK client, with full command/response binding and canonical prompt identity.
+
 ## 0.6.11
 
 - 精确锁步 Protocol 0.6.11；Worker 私有 WorkItem 绑定不新增业务客户端权限。

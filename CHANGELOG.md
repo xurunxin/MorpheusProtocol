@@ -1,5 +1,9 @@
 # 更新日志
 
+## 0.6.12
+
+- Add strict private Worker task.start business contract and stateless SDK client, with full command/response binding and canonical prompt identity.
+
 ## 未发布
 
 - 0.6.11：新增私有 Worker task.bind/task.bind.read 严格契约，将完整 child authority 输入、业务验收条件及目标 revision 与既有 Control WorkItem root/child 回执关联；独立只读恢复不得创建任务或权限。Protocol/SDK 锁步，不宣称完成 H14/H15/G4。
