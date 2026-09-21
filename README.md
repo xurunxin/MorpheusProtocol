@@ -1,5 +1,7 @@
 # MorpheusProtocol
 
+0.6.10 增加只读 `run.authorize.child.read`：精确查询已提交的子授权回执，查询未命中不得创建 grant 或 reservation。历史回执不代表当前执行许可。
+
 运行与验证要求 Bun >=1.4.0，直接使用已安装的兼容版本；CI 使用稳定版。不再为测试额外切换到 1.4.0。依赖和类型包仍由 lockfile 精确固定。
 
 0.6.9 增加独立 [Worker 子授权契约](docs/worker-child-authority-v1.md)：绑定持久化父 claim、Kernel child 证据、子授权和预算 reservation。旧 root 授权不变，未知子授权操作不能降级为 root。本包不签发授权，Control/Worker 真实接线仍需完成。

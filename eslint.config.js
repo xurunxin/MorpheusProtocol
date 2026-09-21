@@ -4,7 +4,13 @@ import tseslint from "typescript-eslint";
 
 export default [
   {
-    ignores: ["**/dist/**", "**/node_modules/**", ".artifacts/**", "bun.lock"],
+    ignores: [
+      "**/dist/**",
+      "**/node_modules/**",
+      ".artifacts/**",
+      ".tmp/**",
+      "bun.lock",
+    ],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,

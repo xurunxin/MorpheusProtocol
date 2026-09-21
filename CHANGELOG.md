@@ -2,6 +2,8 @@
 
 ## 未发布
 
+- 0.6.10：增加子授权历史回执只读查询，复用完整原始 payload 和严格回执关联；读写操作不可互换，不增加可分配预算。Control/Worker 接入及崩溃恢复验收仍需完成。
+
 - 0.6.9：新增私有 `run.authorize.child` 的严格请求、回执与关联校验，固定完整父 writer/Kernel 准备证据及子预算 request/receipt。旧 root 请求保持原样，历史子授权回执 exact replay 不增加额度，也不替代当前 dispatch 检查。Protocol/SDK 锁步发布；不宣称 H15/G4 已完成。
 
 - 0.6.8：Worker 私有 authority 增加 Effect 预算保守对账契约。已知结果按预留上限提交，unknown 保留未决额度；不接受调用方指定金额、释放或退款。严格关联 Effect receipt、预算 CAS、结算及当前状态；实际 Control/Worker 接入和 H15/G4 验收仍未完成。
