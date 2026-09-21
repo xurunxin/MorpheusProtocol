@@ -116,6 +116,11 @@ export interface AgentOsWorkerCurrentAuthorityV1 {
 
 type ControlRequest =
   | {
+      /** Exact immutable receipt lookup. A miss must never allocate authority. */
+      readonly operation: "run.authorize.child.read";
+      readonly payload: AgentOsWorkerChildAuthorizationInputV1;
+    }
+  | {
       readonly operation: "run.authorize.child";
       readonly payload: AgentOsWorkerChildAuthorizationInputV1;
     }
@@ -239,6 +244,11 @@ export type AgentOsWorkerAuthorityResponseV1 = Readonly<{
       }
     | {
         readonly status: "accepted";
+        readonly operation: "run.authorize.child.read.receipt";
+        readonly receipt: AgentOsWorkerChildAuthorizationReceiptV1;
+      }
+    | {
+        readonly status: "accepted";
         readonly operation: "run.authorize.receipt";
         readonly receipt: AgentOsWorkerRunAuthorizationV1;
       }
@@ -355,7 +365,10 @@ export function parseAgentOsWorkerAuthorityRequestV1(
       },
     });
   }
-  if (value.operation === "run.authorize.child") {
+  if (
+    value.operation === "run.authorize.child" ||
+    value.operation === "run.authorize.child.read"
+  ) {
     return deepFreeze({
       ...base,
       operation: value.operation,
@@ -881,6 +894,7 @@ export function parseAgentOsWorkerAuthorityResponseV1(
     operation !== "writer.consume.receipt" &&
     operation !== "run.authorize.receipt" &&
     operation !== "run.authorize.child.receipt" &&
+    operation !== "run.authorize.child.read.receipt" &&
     operation !== "authority.read.receipt" &&
     operation !== "effect.permit.issue.receipt" &&
     operation !== "effect.budget.admit.receipt" &&
@@ -897,7 +911,10 @@ export function parseAgentOsWorkerAuthorityResponseV1(
     authorityNow: instant(value.authorityNow),
   } as const;
   if (value.status === "accepted") {
-    if (operation === "run.authorize.child.receipt") {
+    if (
+      operation === "run.authorize.child.receipt" ||
+      operation === "run.authorize.child.read.receipt"
+    ) {
       const receipt = parseAgentOsWorkerChildAuthorizationReceiptV1(
         value.receipt,
       );
@@ -1044,8 +1061,15 @@ export function assertAgentOsWorkerAuthorityResponseBindingV1(
       invalid();
     return;
   }
-  if (request.operation === "run.authorize.child") {
-    if (response.operation !== "run.authorize.child.receipt") invalid();
+  if (
+    request.operation === "run.authorize.child" ||
+    request.operation === "run.authorize.child.read"
+  ) {
+    if (
+      response.operation !== "run.authorize.child.receipt" &&
+      response.operation !== "run.authorize.child.read.receipt"
+    )
+      invalid();
     assertAgentOsWorkerChildAuthorizationBindingV1(
       request.payload,
       response.receipt,
@@ -1082,6 +1106,7 @@ export function assertAgentOsWorkerAuthorityResponseBindingV1(
   if (
     response.operation === "run.authorize.receipt" ||
     response.operation === "run.authorize.child.receipt" ||
+    response.operation === "run.authorize.child.read.receipt" ||
     response.operation === "authority.read.receipt" ||
     response.operation === "effect.permit.issue.receipt" ||
     response.operation === "effect.budget.admit.receipt" ||

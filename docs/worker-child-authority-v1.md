@@ -1,5 +1,7 @@
 # Worker 受管子授权 v1
 
+0.6.10 新增 `run.authorize.child.read`，payload 是持久化的完整原始 child authorization input，响应操作为 `run.authorize.child.read.receipt`。Control 必须仅查询不可变命令账本，比较 commandId、完整 request digest、父子身份和 Kernel fence；命中才返回原回执，未命中返回拒绝。不得调用 begin、issue、reserve，或创建任何命令/预算/授权记录。已拒绝的原始授权也不能被查询转换为成功。此路径允许在父 writer 恢复、撤销或 Kernel 取消后保存历史证据，但不续期、不重新绑定、不授予 I/O 权限。Worker 的启动及每次新 I/O 仍须独立检查当前父 authority；查询失败绝不能自动回退到写操作。旧端拒绝未知查询时必须保持未决状态。
+
 父 grant 摘要统一使用 `createAgentOsWorkerParentGrantDigestV1`，基于严格解析后的规范字段顺序生成。Control 和 Worker 不得各自选择对象序列化顺序或不同的哈希 preimage。
 
 `parentDefinitionDigest` 与父 store generation、父 run revision 一并封入 Kernel fence；Control 核对父 grant，Worker 核对父 Kernel Run。`preparedAt` 必须早于父 claim 到期。回执的 `requestDigest` 表示整份授权请求，与 child prompt 的 `inputDigest` 区分。子预算 receipt 必须符合现有 Control reserve 形状：空 turn/attempt/effect、receiptId 等于 reserve commandId、初始 reservation revision 为 1、各维剩余额度精确减去预留量。

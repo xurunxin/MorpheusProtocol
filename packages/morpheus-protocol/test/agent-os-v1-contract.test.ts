@@ -390,6 +390,36 @@ test("child authorization binds parent evidence, child authority digests and a r
     status: "accepted",
     receipt,
   };
+  const readWire = { ...wire, operation: "run.authorize.child.read" };
+  const readResponse = {
+    ...response,
+    operation: "run.authorize.child.read.receipt",
+    requestDigest: createAgentOsWorkerAuthorityRequestDigestV1(readWire),
+  };
+  expect(() =>
+    assertAgentOsWorkerAuthorityResponseBindingV1(
+      readWire,
+      JSON.parse(encodeAgentOsWorkerAuthorityResponseV1(readResponse)),
+    ),
+  ).not.toThrow();
+  expect(() =>
+    assertAgentOsWorkerAuthorityResponseBindingV1(readWire, {
+      ...readResponse,
+      operation: "run.authorize.child.receipt",
+    }),
+  ).toThrow();
+  expect(() =>
+    assertAgentOsWorkerAuthorityResponseBindingV1(wire, {
+      ...readResponse,
+      requestDigest: response.requestDigest,
+    }),
+  ).toThrow();
+  expect(() =>
+    parseAgentOsWorkerAuthorityRequestV1({
+      ...readWire,
+      payload: { ...input, allowCreate: true },
+    }),
+  ).toThrow();
   expect(() =>
     assertAgentOsWorkerAuthorityResponseBindingV1(
       wire,
