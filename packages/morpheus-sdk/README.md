@@ -1,5 +1,7 @@
 # @xurunxin/morpheus-sdk
 
+0.6.11：精确依赖 Protocol 0.6.11；Worker/Control 私有 WorkItem 绑定不新增 App SDK 执行接口。
+
 0.6.6：新增 `createWorkerPromptClientV1({ request }).request(input, signal)`，精确依赖 Protocol 0.6.6。调用方注入已授权私有 transport；客户端校验请求与响应绑定，不持有执行权限，不重试。AbortSignal 只取消传输，取消 Run 必须显式发送 prompt.cancel。
 
 transport 必须允许读／取消与长时间 start 并发，按 requestId 关联响应并序列化帧写入。命令幂等性和当前执行状态由 Worker 持久化 owner 处理；SDK 不创建 claim、grant 或时间戳。

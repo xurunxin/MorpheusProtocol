@@ -1,5 +1,12 @@
 import { deepFreeze, sha256Hex } from "./contract-primitives.js";
 import {
+  parseAgentOsWorkerTaskBindingInputV1,
+  parseAgentOsWorkerTaskBindingReceiptV1,
+  assertAgentOsWorkerTaskBindingV1,
+  type AgentOsWorkerTaskBindingInputV1,
+  type AgentOsWorkerTaskBindingReceiptV1,
+} from "./agent-os-worker-task-binding-v1-contract.js";
+import {
   parseAgentOsWorkerChildAuthorizationInputV1,
   parseAgentOsWorkerChildAuthorizationReceiptV1,
   assertAgentOsWorkerChildAuthorizationBindingV1,
@@ -115,6 +122,14 @@ export interface AgentOsWorkerCurrentAuthorityV1 {
 }
 
 type ControlRequest =
+  | {
+      readonly operation: "task.bind";
+      readonly payload: AgentOsWorkerTaskBindingInputV1;
+    }
+  | {
+      readonly operation: "task.bind.read";
+      readonly payload: AgentOsWorkerTaskBindingInputV1;
+    }
   | {
       /** Exact immutable receipt lookup. A miss must never allocate authority. */
       readonly operation: "run.authorize.child.read";
@@ -234,6 +249,16 @@ export type AgentOsWorkerAuthorityResponseV1 = Readonly<{
   (
     | {
         readonly status: "accepted";
+        readonly operation: "task.bind.receipt";
+        readonly receipt: AgentOsWorkerTaskBindingReceiptV1;
+      }
+    | {
+        readonly status: "accepted";
+        readonly operation: "task.bind.read.receipt";
+        readonly receipt: AgentOsWorkerTaskBindingReceiptV1;
+      }
+    | {
+        readonly status: "accepted";
         readonly operation: `${WriterRequest["operation"]}.receipt`;
         readonly receipt: AgentOsWorkerWriterReceiptV1;
       }
@@ -328,6 +353,13 @@ export function parseAgentOsWorkerAuthorityRequestV1(
     );
     if (payload.dispatchReceipt.authority.hostId !== base.workerId) invalid();
     return deepFreeze({ ...base, operation: value.operation, payload });
+  }
+  if (value.operation === "task.bind" || value.operation === "task.bind.read") {
+    return deepFreeze({
+      ...base,
+      operation: value.operation,
+      payload: parseAgentOsWorkerTaskBindingInputV1(value.payload),
+    });
   }
   if (value.operation === "effect.permit.issue")
     return deepFreeze({
@@ -890,6 +922,8 @@ export function parseAgentOsWorkerAuthorityResponseV1(
   const operation = value.operation;
   if (
     operation !== "writer.activate.receipt" &&
+    operation !== "task.bind.receipt" &&
+    operation !== "task.bind.read.receipt" &&
     operation !== "writer.recover.receipt" &&
     operation !== "writer.consume.receipt" &&
     operation !== "run.authorize.receipt" &&
@@ -911,6 +945,14 @@ export function parseAgentOsWorkerAuthorityResponseV1(
     authorityNow: instant(value.authorityNow),
   } as const;
   if (value.status === "accepted") {
+    if (
+      operation === "task.bind.receipt" ||
+      operation === "task.bind.read.receipt"
+    ) {
+      const receipt = parseAgentOsWorkerTaskBindingReceiptV1(value.receipt);
+      if (receipt.scope.hostId !== base.workerId) invalid();
+      return deepFreeze({ ...base, operation, status: "accepted", receipt });
+    }
     if (
       operation === "run.authorize.child.receipt" ||
       operation === "run.authorize.child.read.receipt"
@@ -1008,6 +1050,19 @@ export function assertAgentOsWorkerAuthorityResponseBindingV1(
   )
     invalid();
   if (response.status === "rejected") return;
+  if (
+    request.operation === "task.bind" ||
+    request.operation === "task.bind.read"
+  ) {
+    if (
+      response.operation !== "task.bind.receipt" &&
+      response.operation !== "task.bind.read.receipt"
+    )
+      invalid();
+    assertAgentOsWorkerTaskBindingV1(request.payload, response.receipt);
+    if (response.receipt.scope.hostId !== request.workerId) invalid();
+    return;
+  }
   if (request.operation === "effect.budget.reconcile") {
     if (response.operation !== "effect.budget.reconcile.receipt") invalid();
     if (request.payload.dispatchReceipt.completedAt > response.authorityNow)
@@ -1105,6 +1160,8 @@ export function assertAgentOsWorkerAuthorityResponseBindingV1(
   }
   if (
     response.operation === "run.authorize.receipt" ||
+    response.operation === "task.bind.receipt" ||
+    response.operation === "task.bind.read.receipt" ||
     response.operation === "run.authorize.child.receipt" ||
     response.operation === "run.authorize.child.read.receipt" ||
     response.operation === "authority.read.receipt" ||

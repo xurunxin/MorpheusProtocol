@@ -1,5 +1,7 @@
 # MorpheusProtocol
 
+0.6.11 增加私有 [Worker WorkItem 绑定契约](docs/worker-task-binding-v1.md)：`task.bind` 和独立只读 `task.bind.read` 关联真实 Control WorkItem 回执与完整 Kernel child 输入。它不接收业务调用方伪造的 authority，也不替代当前执行检查；生产 owner 接线和 G4 尚未由本包完成。
+
 0.6.10 增加只读 `run.authorize.child.read`：精确查询已提交的子授权回执，查询未命中不得创建 grant 或 reservation。历史回执不代表当前执行许可。
 
 运行与验证要求 Bun >=1.4.0，直接使用已安装的兼容版本；CI 使用稳定版。不再为测试额外切换到 1.4.0。依赖和类型包仍由 lockfile 精确固定。

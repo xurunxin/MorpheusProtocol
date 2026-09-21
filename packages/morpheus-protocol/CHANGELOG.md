@@ -1,5 +1,9 @@
 # 更新日志
 
+## 0.6.11
+
+- 新增私有 Worker WorkItem 绑定及只读恢复契约，严格校验实际 root/child WorkItem 回执 lineage、请求摘要与业务元数据。无存储、授权或 Kernel lifecycle 实现。
+
 ## 0.6.7
 
 - 新增任务句柄 v1 严格身份/视图/证据/演进校验，以及 observe、set-delivery、cancel 意图的规范编码、摘要和响应绑定。无存储或 authority 实现。
