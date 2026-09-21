@@ -1,5 +1,7 @@
 # @xurunxin/morpheus-protocol
 
+0.6.11：新增 Worker/Control 私有 `task.bind` 与 `task.bind.read`。`parseAgentOsWorkerTaskBindingInputV1`、`create/parseAgentOsWorkerTaskBindingReceiptV1` 和 `assertAgentOsWorkerTaskBindingV1` 绑定真实 Control WorkItem lineage、完整 child authorization 输入、验收条件与目标 revision。历史读取不创建 WorkItem，不授予新执行权限；详见 `docs/worker-task-binding-v1.md`。
+
 0.6.6：新增 `agent-os-worker-prompt/v1` 私有 Worker 业务入口：`prompt.start`（commandId/runId/turnId/attemptId/prompt）、`prompt.read`（runId/cursor/limit）和 `prompt.cancel`（commandId/runId/attemptId/reason）。严格拒绝调用方传入 grant、claim、fence、策略、配置和时间戳；canonical Prompt 响应仍由 Worker 生成。最大帧 1 MiB，read 最多 256 个事件，prompt 复用 32 条 user 消息／64 KiB 解析器，cancel reason 最多 1024 UTF-8 字节。
 
 `createAgentOsWorkerPromptRequestDigestV1` 绑定完整请求，`createAgentOsWorkerPromptCommandDigestV1` 排除 transport requestId，供 Worker 在任何 Control 写入之前持久化幂等命令。相同 commandId 改变业务输入必须拒绝；重试复用原内部请求；cancel 必须从本地持久状态读取当前 claim/fence 并核对 attempt。摘要不是授权，私有通道的所有权检查由组合层负责。JSON 编解码不包含换行；JSONL transport 必须严格 UTF-8、有界缓冲、序列化响应写入，并允许 start 等待期间读取／取消。

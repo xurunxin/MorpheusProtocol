@@ -1,6 +1,6 @@
 {
   "name": "@xurunxin/morpheus-sdk",
-  "version": "0.6.10",
+  "version": "0.6.11",
   "description": "Morpheus 应用层轻量客户端 SDK",
   "type": "module",
   "license": "Apache-2.0",
@@ -55,6 +55,6 @@
     "prepack": "bun run build"
   },
   "dependencies": {
-    "@xurunxin/morpheus-protocol": "0.6.10"
+    "@xurunxin/morpheus-protocol": "0.6.11"
   }
 }
