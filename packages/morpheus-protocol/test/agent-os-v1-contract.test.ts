@@ -265,6 +265,7 @@ test("child authorization binds parent evidence, child authority digests and a r
     parentGrantDigest: createAgentOsWorkerParentGrantDigestV1(parentGrant),
     parentTurnId: "turn.parent",
     parentRunRevision: 3,
+    parentDefinitionDigest: parentGrant.definitionDigest,
     kernelChildId: "child.one",
     logicalChildKey: "child.one",
     runId: "run.demo",
@@ -319,7 +320,7 @@ test("child authorization binds parent evidence, child authority digests and a r
   const reservation: AgentOsBudgetReservationReceiptUnsignedV1 = {
     schemaVersion: "agent-os-run-tree-budget/v1",
     operation: "reserve",
-    receiptId: "receipt.child",
+    receiptId: draft.commandId,
     commandId: draft.commandId,
     reservationId: draft.reservationId,
     requestDigest: budgetRequest.requestDigest,
@@ -348,7 +349,7 @@ test("child authorization binds parent evidence, child authority digests and a r
     schemaVersion: "agent-os-worker-child-authority/v1",
     commandId: input.commandId,
     admissionId: input.admissionId,
-    inputDigest: createAgentOsWorkerChildAuthorizationInputDigestV1(input),
+    requestDigest: createAgentOsWorkerChildAuthorizationInputDigestV1(input),
     parentGrantDigest: input.parentGrantDigest,
     kernelFenceDigest: input.kernelFenceDigest,
     authorization: {
@@ -406,6 +407,62 @@ test("child authorization binds parent evidence, child authority digests and a r
     ).toThrow();
   const { kernelFenceDigest: ignored, ...unsigned } = input;
   void ignored;
+  expect(() =>
+    createAgentOsWorkerChildAuthorizationInputV1({
+      ...unsigned,
+      preparedAt: input.parentClaim.expiresAt,
+    }),
+  ).toThrow();
+  expect(() =>
+    parseAgentOsWorkerChildAuthorizationInputV1({
+      ...input,
+      parentDefinitionDigest: digest("other-parent"),
+    }),
+  ).toThrow();
+  const { receiptDigest: oldReceiptDigest, ...unsignedReceipt } = receipt;
+  void oldReceiptDigest;
+  for (const patch of [
+    { receiptId: "receipt.impossible" },
+    { reservationRevision: 2 },
+    { availableAfter: { ...reservation.availableAfter, inputTokens: 1 } },
+    { parentReservationId: "reservation.foreign" },
+  ]) {
+    const altered = { ...reservation, ...patch };
+    expect(() =>
+      createAgentOsWorkerChildAuthorizationReceiptV1({
+        ...unsignedReceipt,
+        budgetReceipt: {
+          ...altered,
+          receiptDigest: createAgentOsBudgetReservationReceiptDigestV1(altered),
+        },
+      }),
+    ).toThrow();
+  }
+  for (const field of ["turnId", "attemptId"] as const) {
+    const altered = {
+      ...draft,
+      subject: { ...draft.subject, [field]: "unexpected.child" },
+    };
+    const changedRequest = {
+      ...altered,
+      requestDigest: createAgentOsBudgetReservationRequestDigestV1(altered),
+    };
+    const changedReceipt = {
+      ...reservation,
+      requestDigest: changedRequest.requestDigest,
+    };
+    expect(() =>
+      createAgentOsWorkerChildAuthorizationReceiptV1({
+        ...unsignedReceipt,
+        budgetRequest: changedRequest,
+        budgetReceipt: {
+          ...changedReceipt,
+          receiptDigest:
+            createAgentOsBudgetReservationReceiptDigestV1(changedReceipt),
+        },
+      }),
+    ).toThrow();
+  }
   const other = createAgentOsWorkerChildAuthorizationInputV1({
     ...unsigned,
     commandId: "command.other",

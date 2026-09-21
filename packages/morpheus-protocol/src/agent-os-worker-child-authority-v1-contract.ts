@@ -19,6 +19,7 @@ export interface AgentOsWorkerChildAuthorizationInputV1 {
   readonly parentGrantDigest: string;
   readonly parentTurnId: string;
   readonly parentRunRevision: number;
+  readonly parentDefinitionDigest: string;
   readonly kernelChildId: string;
   readonly logicalChildKey: string;
   readonly runId: string;
@@ -38,7 +39,7 @@ export interface AgentOsWorkerChildAuthorizationReceiptV1 {
   readonly schemaVersion: "agent-os-worker-child-authority/v1";
   readonly commandId: string;
   readonly admissionId: string;
-  readonly inputDigest: string;
+  readonly requestDigest: string;
   readonly parentGrantDigest: string;
   readonly kernelFenceDigest: string;
   readonly authorization: ReturnType<
@@ -61,6 +62,7 @@ const inputKeys = [
   "parentGrantDigest",
   "parentTurnId",
   "parentRunRevision",
+  "parentDefinitionDigest",
   "kernelChildId",
   "logicalChildKey",
   "runId",
@@ -77,7 +79,7 @@ const receiptKeys = [
   "schemaVersion",
   "commandId",
   "admissionId",
-  "inputDigest",
+  "requestDigest",
   "parentGrantDigest",
   "kernelFenceDigest",
   "authorization",
@@ -119,6 +121,7 @@ function unsignedInput(
     new Date(value.preparedAt).toISOString() !== value.preparedAt
   )
     invalid();
+  if (value.preparedAt >= parentClaim.expiresAt) invalid();
   return {
     schemaVersion: "agent-os-worker-child-authority/v1",
     commandId: id(value.commandId),
@@ -127,6 +130,7 @@ function unsignedInput(
     parentGrantDigest: digest(value.parentGrantDigest),
     parentTurnId: id(value.parentTurnId),
     parentRunRevision: integer(value.parentRunRevision, 1),
+    parentDefinitionDigest: digest(value.parentDefinitionDigest),
     kernelChildId: id(value.kernelChildId),
     logicalChildKey: id(value.logicalChildKey),
     runId,
@@ -186,7 +190,12 @@ function unsignedReceipt(
     authorization.duplicate ||
     budgetReceipt.disposition !== "reserved" ||
     budgetRequest.subject.kind !== "child" ||
+    budgetRequest.subject.turnId !== null ||
+    budgetRequest.subject.attemptId !== null ||
+    budgetRequest.subject.effectId !== null ||
     budgetRequest.subject.runId !== grant.runId ||
+    budgetReceipt.receiptId !== budgetRequest.commandId ||
+    budgetReceipt.reservationRevision !== 1 ||
     budgetRequest.commandId !== budgetReceipt.commandId ||
     budgetRequest.reservationId !== budgetReceipt.reservationId ||
     budgetRequest.requestDigest !== budgetReceipt.requestDigest ||
@@ -204,12 +213,17 @@ function unsignedReceipt(
   )
     invalid();
   for (const key of dimensions)
-    if (budgetRequest.requested[key] !== budgetReceipt.reserved[key]) invalid();
+    if (
+      budgetRequest.requested[key] !== budgetReceipt.reserved[key] ||
+      budgetReceipt.availableAfter[key] !==
+        budgetReceipt.availableBefore[key] - budgetRequest.requested[key]
+    )
+      invalid();
   return {
     schemaVersion: "agent-os-worker-child-authority/v1",
     commandId: id(value.commandId),
     admissionId: id(value.admissionId),
-    inputDigest: digest(value.inputDigest),
+    requestDigest: digest(value.requestDigest),
     parentGrantDigest: digest(value.parentGrantDigest),
     kernelFenceDigest,
     authorization,
@@ -249,7 +263,7 @@ export function assertAgentOsWorkerChildAuthorizationBindingV1(
     if (request[key] !== receipt[key]) invalid();
   const grant = receipt.authorization.contract.executionGrant;
   if (
-    receipt.inputDigest !== hash(request) ||
+    receipt.requestDigest !== hash(request) ||
     grant.runId !== request.runId ||
     grant.attemptId !== request.attemptId ||
     receipt.authorization.turnId !== request.turnId ||
