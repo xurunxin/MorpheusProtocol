@@ -333,6 +333,7 @@ function writeV3Consumer(consumerDirectory) {
       `if (typeof createInteractiveJsonlStreamTransport !== "function") throw new Error("missing sdk/node transport");\n` +
       `if (typeof createBrowserInteractiveTransport !== "function") throw new Error("missing sdk/browser transport");\n` +
       `const p4 = await import("@xurunxin/morpheus-protocol");\n` +
+      `for(const name of ["createAgentOsWorkerChildAuthorizationInputV1","parseAgentOsWorkerChildAuthorizationInputV1","createAgentOsWorkerChildAuthorizationReceiptV1","assertAgentOsWorkerChildAuthorizationBindingV1"]) if(typeof p4[name]!=="function") throw new Error("missing child authority export: "+name);\n` +
       `const s4 = await import("@xurunxin/morpheus-sdk");\n` +
       `const taskRead={schemaVersion:p4.AGENT_OS_TASK_HANDLE_V1,operation:"task.observe",requestId:"packed.task",handleId:"task."+"1".repeat(64)};\n` +
       `const taskClient=s4.createTaskHandleClientV1({request:(r)=>({schemaVersion:r.schemaVersion,operation:r.operation,requestId:r.requestId,requestDigest:p4.createAgentOsTaskRequestDigestV1(r),status:"rejected",code:"NOT_FOUND"})});\n` +

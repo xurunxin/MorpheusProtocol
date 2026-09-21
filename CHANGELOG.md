@@ -2,6 +2,8 @@
 
 ## 未发布
 
+- 0.6.9：新增私有 `run.authorize.child` 的严格请求、回执与关联校验，固定完整父 writer/Kernel 准备证据及子预算 request/receipt。旧 root 请求保持原样，历史子授权回执 exact replay 不增加额度，也不替代当前 dispatch 检查。Protocol/SDK 锁步发布；不宣称 H15/G4 已完成。
+
 - 0.6.8：Worker 私有 authority 增加 Effect 预算保守对账契约。已知结果按预留上限提交，unknown 保留未决额度；不接受调用方指定金额、释放或退款。严格关联 Effect receipt、预算 CAS、结算及当前状态；实际 Control/Worker 接入和 H15/G4 验收仍未完成。
 
 - 0.6.7：任务句柄 v1 身份、状态视图、追加式制品/检查/结算证据、规范 wire 与 SDK。终态允许审计 revision 增长但不能翻转执行结果；中断观察不产生取消。
