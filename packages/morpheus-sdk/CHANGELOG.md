@@ -1,5 +1,9 @@
 # 更新日志
 
+## 0.6.13
+
+- 锁步消费 Protocol 0.6.13；公开 SDK 调用方式不变。
+
 ## 0.6.12
 
 - Add strict private Worker task.start business contract and stateless SDK client, with full command/response binding and canonical prompt identity.

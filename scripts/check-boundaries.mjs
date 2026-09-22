@@ -16,7 +16,7 @@ assert(
   protocolPackage.name === "@xurunxin/morpheus-protocol",
   "unexpected Protocol identity",
 );
-assert(protocolPackage.version === "0.6.12", "unexpected Protocol version");
+assert(protocolPackage.version === "0.6.13", "unexpected Protocol version");
 assert(
   protocolPackage.private !== true,
   "Protocol package must be publishable",
@@ -33,15 +33,17 @@ assert(
 assert(sdkPackage.private !== true, "SDK package must be publishable");
 assert(
   JSON.stringify(sdkPackage.dependencies) ===
-    JSON.stringify({ "@xurunxin/morpheus-protocol": "0.6.12" }),
-  "SDK must depend only on exact @xurunxin/morpheus-protocol@0.6.12",
+    JSON.stringify({ "@xurunxin/morpheus-protocol": "0.6.13" }),
+  "SDK must depend only on exact @xurunxin/morpheus-protocol@0.6.13",
 );
 
 for (const file of await typescriptFiles(resolve(protocolRoot, "src"))) {
   const source = await readFile(file, "utf8");
   for (const specifier of importSpecifiers(source)) {
     assert(
-      specifier.startsWith("."),
+      specifier.startsWith(".") ||
+        (file === resolve(protocolRoot, "src/sha256.native.ts") &&
+          specifier === "node:crypto"),
       `Protocol external import is forbidden: ${specifier} (${file})`,
     );
   }

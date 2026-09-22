@@ -1,6 +1,6 @@
 {
   "name": "@xurunxin/morpheus-protocol-workspace",
-  "version": "0.6.12",
+  "version": "0.6.13",
   "private": true,
   "description": "Morpheus 版本化协议与应用 SDK 开发仓库",
   "type": "module",
@@ -15,7 +15,7 @@
   },
   "scripts": {
     "clean": "bun scripts/clean.mjs",
-    "build": "bun run clean && bun x tsc -b --force && bun build packages/morpheus-protocol/src/index.ts --outdir packages/morpheus-protocol/dist --target browser --format esm && bun build packages/morpheus-sdk/src/index.ts packages/morpheus-sdk/src/node-transport.ts packages/morpheus-sdk/src/browser-transport.ts --outdir packages/morpheus-sdk/dist --target browser --format esm --external @xurunxin/morpheus-protocol",
+    "build": "bun run clean && bun x tsc -b --force && bun scripts/build-protocol.mjs && bun build packages/morpheus-sdk/src/index.ts packages/morpheus-sdk/src/node-transport.ts packages/morpheus-sdk/src/browser-transport.ts --outdir packages/morpheus-sdk/dist --target browser --format esm --external @xurunxin/morpheus-protocol",
     "typecheck": "bun x tsc -b --force",
     "test": "bun test && bun run check:boundaries && bun run check:dependencies",
     "lint": "bun x eslint .",
@@ -27,7 +27,7 @@
     "check:version": "bun scripts/check-package-versions.mjs",
     "pack": "bun scripts/pack-packages.mjs",
     "test:packed-consumer": "bun scripts/verify-packed-consumer.mjs",
-    "verify": "bun run check && bun run test && bun run build",
+    "verify": "bun run check && bun run test && bun run build && bun scripts/verify-native-exports.mjs",
     "verify:full": "bun run verify && bun run test:packed-consumer",
     "release:check": "bun run verify:full && bun run pack && bun run check:version"
   },

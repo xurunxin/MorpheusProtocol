@@ -287,6 +287,17 @@ async function runConsumerCase(specification) {
         "consumer import",
       );
     }
+    if (entry.layers.install.ok && specification.caseName === "new-new") {
+      run(
+        [
+          "bun",
+          resolve(root, "scripts/verify-native-exports.mjs"),
+          resolve(consumer, "node_modules/@xurunxin/morpheus-protocol"),
+        ],
+        consumer,
+        "native/browser packed consumers",
+      );
+    }
     const rejected =
       !entry.layers.install.ok || entry.layers.import?.ok === false;
     if (specification.expected === "accept") {

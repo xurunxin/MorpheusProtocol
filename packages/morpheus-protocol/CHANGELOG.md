@@ -1,5 +1,9 @@
 # 更新日志
 
+## 0.6.13
+
+- Node/Bun 条件入口使用原生共享 SHA-256；浏览器入口及协议摘要保持兼容。
+
 ## 0.6.12
 
 - Add strict private Worker task.start business contract and stateless SDK client, with full command/response binding and canonical prompt identity.

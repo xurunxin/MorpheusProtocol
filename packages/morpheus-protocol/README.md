@@ -1,5 +1,7 @@
 # @xurunxin/morpheus-protocol
 
+未发布性能候选：根入口按 `browser`、`bun`、`node` 条件选择产物。浏览器保持同步 TypeScript SHA-256，Node/Bun 共享摘要使用同步 `node:crypto`。公开导出、类型、UTF-8 与 canonical JSON 字节约定不变，无 npm 生产依赖；provider projection 的独立输入防护实现保持不变。消费者应通过包名导入；浏览器构建器须使用 browser 条件，不能直接引用 `dist/index.node.js`。Protocol/SDK 发布时仍须锁步分配新版本。
+
 0.6.12：`agent-os-worker-task-start/v1` 为 Task 创建提供严格业务输入。使用 `parse/encode/decodeAgentOsWorkerTaskStartRequestV1`、对应 Response 和 `assertAgentOsWorkerTaskStartResponseBindingV1`；command digest 排除 transport requestId，完整保留业务参数。`createAgentOsWorkerTaskPromptDigestV1` 定义与已有 Worker child 相同的 canonical prompt digest。
 
 0.6.11：新增 Worker/Control 私有 `task.bind` 与 `task.bind.read`。`parseAgentOsWorkerTaskBindingInputV1`、`create/parseAgentOsWorkerTaskBindingReceiptV1` 和 `assertAgentOsWorkerTaskBindingV1` 绑定真实 Control WorkItem lineage、完整 child authorization 输入、验收条件与目标 revision。历史读取不创建 WorkItem，不授予新执行权限；详见 `docs/worker-task-binding-v1.md`。
